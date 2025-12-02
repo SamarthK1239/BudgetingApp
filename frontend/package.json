@@ -7,6 +7,10 @@
   "author": "BudgetingApp Team",
   "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SamarthK1239/BudgetingApp.git"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
@@ -58,6 +62,7 @@
     "appId": "com.budgetingapp.app",
     "productName": "BudgetingApp",
     "extends": null,
+    "publish": null,
     "files": [
       "build/**/*",
       "src/main/**/*",
