@@ -6,7 +6,7 @@
   "homepage": "./",
   "author": {
     "name": "BudgetingApp Team",
-    "email": "budgetingapp@gmail.com"
+    "email": "budgetingapp@example.com"
   },
   "license": "MIT",
   "private": true,

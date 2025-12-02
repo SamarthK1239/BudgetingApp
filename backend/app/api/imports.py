@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.transaction import Transaction, TransactionType
 from app.models.account import Account
 from app.models.category import Category, CategoryType
+from app.models.category_keyword import CategoryKeyword
 
 router = APIRouter()
 
@@ -434,14 +435,53 @@ class ImportResult(BaseModel):
     auto_categorized_count: int
 
 
+def find_category_by_user_keywords(text: str, transaction_type: TransactionType, db: Session) -> Optional[Tuple[int, str]]:
+    """
+    Find a matching category based on user-defined keyword rules.
+    Returns (category_id, category_name) or None if no match.
+    User-defined keywords take priority over built-in ones.
+    """
+    if not text:
+        return None
+    
+    # Get active user keywords ordered by priority (highest first)
+    user_keywords = db.query(CategoryKeyword).filter(
+        CategoryKeyword.is_active == True
+    ).order_by(CategoryKeyword.priority.desc()).all()
+    
+    for kw in user_keywords:
+        if kw.matches(text):
+            # Verify the category exists and matches transaction type
+            category = db.query(Category).filter(Category.id == kw.category_id).first()
+            if category:
+                expected_type = CategoryType.INCOME if transaction_type == TransactionType.INCOME else CategoryType.EXPENSE
+                if category.category_type == expected_type:
+                    # Get full category name
+                    if category.parent_id:
+                        parent = db.query(Category).filter(Category.id == category.parent_id).first()
+                        full_name = f"{parent.name} > {category.name}" if parent else category.name
+                    else:
+                        full_name = category.name
+                    return (category.id, full_name)
+    
+    return None
+
+
 def find_category_by_keywords(text: str, transaction_type: TransactionType, db: Session) -> Optional[Tuple[int, str]]:
     """
     Find a matching category based on keywords in the transaction description.
+    First checks user-defined keywords, then falls back to built-in keywords.
     Returns (category_id, category_name) or None if no match.
     """
     if not text:
         return None
     
+    # First try user-defined keywords (higher priority)
+    result = find_category_by_user_keywords(text, transaction_type, db)
+    if result:
+        return result
+    
+    # Fall back to built-in keywords
     text_lower = text.lower()
     
     # Try to find a matching keyword

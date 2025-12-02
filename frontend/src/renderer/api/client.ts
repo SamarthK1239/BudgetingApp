@@ -118,6 +118,85 @@ class ApiClient {
     return this.client!.delete(`/api/categories/type/${categoryType}`);
   }
 
+  // Category Keyword endpoints (auto-categorization rules)
+  async getKeywords(params: {
+    category_id?: number;
+    is_active?: boolean;
+    search?: string;
+    skip?: number;
+    limit?: number;
+  } = {}): Promise<any> {
+    return this.client!.get('/api/keywords', { params });
+  }
+
+  async getKeyword(id: number | string): Promise<any> {
+    return this.client!.get(`/api/keywords/${id}`);
+  }
+
+  async getKeywordsCount(): Promise<any> {
+    return this.client!.get('/api/keywords/count');
+  }
+
+  async getBuiltinKeywords(params: { search?: string; limit?: number } = {}): Promise<any> {
+    return this.client!.get('/api/keywords/builtin', { params });
+  }
+
+  async createKeyword(data: {
+    keyword: string;
+    category_id: number;
+    priority?: number;
+    match_mode?: 'contains' | 'starts_with' | 'exact';
+  }): Promise<any> {
+    return this.client!.post('/api/keywords', data);
+  }
+
+  async bulkCreateKeywords(keywords: Array<{
+    keyword: string;
+    category_id: number;
+    priority?: number;
+    match_mode?: 'contains' | 'starts_with' | 'exact';
+  }>): Promise<any> {
+    return this.client!.post('/api/keywords/bulk', { keywords });
+  }
+
+  async updateKeyword(id: number | string, data: {
+    keyword?: string;
+    category_id?: number;
+    priority?: number;
+    match_mode?: 'contains' | 'starts_with' | 'exact';
+    is_active?: boolean;
+  }): Promise<any> {
+    return this.client!.put(`/api/keywords/${id}`, data);
+  }
+
+  async deleteKeyword(id: number | string): Promise<any> {
+    return this.client!.delete(`/api/keywords/${id}`);
+  }
+
+  async deleteAllKeywords(): Promise<any> {
+    return this.client!.delete('/api/keywords');
+  }
+
+  async testKeyword(text: string): Promise<any> {
+    return this.client!.post('/api/keywords/test', { text });
+  }
+
+  async suggestKeywords(limit: number = 50): Promise<any> {
+    return this.client!.post('/api/keywords/suggest', null, { params: { limit } });
+  }
+
+  async recategorizeTransactions(options: {
+    onlyUncategorized?: boolean;
+    dryRun?: boolean;
+  } = {}): Promise<any> {
+    return this.client!.post('/api/keywords/recategorize', null, {
+      params: {
+        only_uncategorized: options.onlyUncategorized !== false,
+        dry_run: options.dryRun || false,
+      },
+    });
+  }
+
   // Transaction endpoints
   async getTransactions(params: any = {}): Promise<any> {
     return this.client!.get('/api/transactions', { params });

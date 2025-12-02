@@ -46,6 +46,63 @@ export interface Category {
   subcategories?: Category[];
 }
 
+// Category Keyword types for auto-categorization rules
+export type MatchMode = 'contains' | 'starts_with' | 'exact';
+
+export interface CategoryKeyword {
+  id: number;
+  keyword: string;
+  category_id: number;
+  priority: number;
+  match_mode: MatchMode;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CategoryKeywordWithCategory extends CategoryKeyword {
+  category_name: string;
+  parent_category_name?: string;
+}
+
+export interface CategoryKeywordCreate {
+  keyword: string;
+  category_id: number;
+  priority?: number;
+  match_mode?: MatchMode;
+}
+
+export interface CategoryKeywordUpdate {
+  keyword?: string;
+  category_id?: number;
+  priority?: number;
+  match_mode?: MatchMode;
+  is_active?: boolean;
+}
+
+export interface KeywordTestResult {
+  text: string;
+  matched: boolean;
+  matched_keyword?: string;
+  category_id?: number;
+  category_name?: string;
+  match_source?: 'user' | 'builtin';
+}
+
+export interface BuiltinKeyword {
+  keyword: string;
+  parent_category: string;
+  category: string;
+  category_id?: number;
+  full_name: string;
+}
+
+export interface KeywordSuggestion {
+  keyword: string;
+  occurrence_count: number;
+  example_payee: string;
+}
+
 // Transaction types
 export enum TransactionType {
   INCOME = 'income',

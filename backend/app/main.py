@@ -5,10 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.database import engine, Base
-from app.api import accounts, transactions, categories, budgets, reports, setup, imports
+from app.api import accounts, transactions, categories, budgets, reports, setup, imports, keywords
 
 # Import models to ensure they're registered with Base
-from app.models import account, transaction, category, budget
+from app.models import account, transaction, category, budget, category_keyword
 
 
 @asynccontextmanager
@@ -60,6 +60,7 @@ app.include_router(setup.router, prefix="/api/setup", tags=["setup"])
 app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"])
 app.include_router(transactions.router, prefix="/api/transactions", tags=["transactions"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
+app.include_router(keywords.router, prefix="/api/keywords", tags=["keywords"])
 app.include_router(budgets.router, prefix="/api/budgets", tags=["budgets"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(imports.router, prefix="/api/import", tags=["import"])
