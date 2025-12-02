@@ -4,7 +4,10 @@
   "description": "Desktop budgeting application with Python backend and React frontend",
   "main": "src/main/main.js",
   "homepage": "./",
-  "author": "BudgetingApp Team",
+  "author": {
+    "name": "BudgetingApp Team",
+    "email": "budgetingapp@gmail.com"
+  },
   "license": "MIT",
   "private": true,
   "repository": {
