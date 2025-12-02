@@ -1,0 +1,2 @@
+/* Re-export styles for Create React App compatibility */
+@import './renderer/App.css';

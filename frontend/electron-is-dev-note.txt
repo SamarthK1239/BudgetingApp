@@ -1,0 +1,4 @@
+// Add electron-is-dev to package.json dependencies
+{
+  "electron-is-dev": "^2.0.0"
+}
