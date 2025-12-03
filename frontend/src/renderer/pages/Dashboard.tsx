@@ -7,7 +7,7 @@ import {
   SwapOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
@@ -304,18 +304,17 @@ const Dashboard: React.FC = () => {
             ) : pieChartData.length === 0 ? (
               <Empty description="No spending this month" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={350}>
                 <PieChart>
                   <Pie
                     data={pieChartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
+                    innerRadius={60}
+                    outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
+                    paddingAngle={2}
                   >
                     {pieChartData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -325,6 +324,12 @@ const Dashboard: React.FC = () => {
                     formatter={(value: number) =>
                       `$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
                     }
+                  />
+                  <Legend 
+                    layout="horizontal" 
+                    verticalAlign="bottom" 
+                    align="center"
+                    wrapperStyle={{ paddingTop: 20 }}
                   />
                 </PieChart>
               </ResponsiveContainer>

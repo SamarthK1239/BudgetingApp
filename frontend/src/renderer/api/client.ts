@@ -265,11 +265,21 @@ class ApiClient {
   }
 
   // Import endpoints
-  async previewImport(file: File, accountId: number, dateFormat: string = '%m/%d/%Y'): Promise<any> {
+  async previewImport(
+    file: File, 
+    accountId: number, 
+    dateFormat: string = '%m/%d/%Y',
+    flipTypes?: boolean
+  ): Promise<any> {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('account_id', accountId.toString());
     formData.append('date_format', dateFormat);
+    
+    // Only include flip_types if explicitly set (not undefined)
+    if (flipTypes !== undefined) {
+      formData.append('flip_types', flipTypes.toString());
+    }
     
     return this.client!.post('/api/import/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -284,6 +294,7 @@ class ApiClient {
       skipDuplicates?: boolean;
       dateFormat?: string;
       autoCategorize?: boolean;
+      flipTypes?: boolean;
     } = {}
   ): Promise<any> {
     const formData = new FormData();
@@ -295,6 +306,11 @@ class ApiClient {
     
     if (options.defaultCategoryId) {
       formData.append('default_category_id', options.defaultCategoryId.toString());
+    }
+    
+    // Only include flip_types if explicitly set (not undefined)
+    if (options.flipTypes !== undefined) {
+      formData.append('flip_types', options.flipTypes.toString());
     }
     
     return this.client!.post('/api/import/execute', formData, {

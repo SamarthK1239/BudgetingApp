@@ -83,6 +83,9 @@ const Transactions: React.FC = () => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
+  // Pagination state
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+
   // Import modal state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importStep, setImportStep] = useState(0);
@@ -94,6 +97,7 @@ const Transactions: React.FC = () => {
     defaultCategoryId: undefined as number | undefined,
     dateFormat: '%m/%d/%Y',
     autoCategorize: true,
+    flipTypes: undefined as boolean | undefined,
   });
   const [importResult, setImportResult] = useState<any>(null);
   const [importLoading, setImportLoading] = useState(false);
@@ -318,6 +322,7 @@ const Transactions: React.FC = () => {
       defaultCategoryId: undefined,
       dateFormat: '%m/%d/%Y',
       autoCategorize: true,
+      flipTypes: undefined,
     });
   };
 
@@ -346,7 +351,8 @@ const Transactions: React.FC = () => {
       const preview = await apiClient.previewImport(
         importFile,
         importAccountId,
-        importOptions.dateFormat
+        importOptions.dateFormat,
+        importOptions.flipTypes
       );
       setImportPreview(preview);
       setImportStep(1);
@@ -367,6 +373,7 @@ const Transactions: React.FC = () => {
         defaultCategoryId: importOptions.defaultCategoryId,
         dateFormat: importOptions.dateFormat,
         autoCategorize: importOptions.autoCategorize,
+        flipTypes: importOptions.flipTypes,
       });
       setImportResult(result);
       setImportStep(2);
@@ -574,9 +581,12 @@ const Transactions: React.FC = () => {
           rowKey="id"
           loading={isLoading}
           pagination={{
-            pageSize: 20,
+            current: pagination.current,
+            pageSize: pagination.pageSize,
             showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} transactions`,
+            onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
           }}
         />
       </Card>
@@ -866,6 +876,23 @@ const Transactions: React.FC = () => {
                   <Option value="%m-%d-%Y">MM-DD-YYYY</Option>
                 </Select>
               </Form.Item>
+
+              <Form.Item 
+                label="Transaction Type Handling"
+                extra="Different banks use different conventions. If expenses appear as income (or vice versa), try flipping the types."
+              >
+                <Select
+                  value={importOptions.flipTypes === undefined ? 'auto' : importOptions.flipTypes ? 'flip' : 'normal'}
+                  onChange={(value) => setImportOptions({ 
+                    ...importOptions, 
+                    flipTypes: value === 'auto' ? undefined : value === 'flip' 
+                  })}
+                >
+                  <Option value="auto">Auto-detect (flip for credit cards)</Option>
+                  <Option value="normal">Normal (positive = income, negative = expense)</Option>
+                  <Option value="flip">Flipped (positive = expense, negative = income)</Option>
+                </Select>
+              </Form.Item>
             </Form>
 
             <div style={{ textAlign: 'right', marginTop: 16 }}>
@@ -946,7 +973,33 @@ const Transactions: React.FC = () => {
 
             <Card title="Import Options" size="small" style={{ marginBottom: 16 }}>
               <Form layout="vertical">
-                <Form.Item>
+                <Form.Item 
+                  label="Transaction Type Handling"
+                  extra="If income/expenses look reversed, change this setting and click 'Re-preview'"
+                  style={{ marginBottom: 12 }}
+                >
+                  <Space>
+                    <Select
+                      value={importOptions.flipTypes === undefined ? 'auto' : importOptions.flipTypes ? 'flip' : 'normal'}
+                      onChange={(value) => setImportOptions({ 
+                        ...importOptions, 
+                        flipTypes: value === 'auto' ? undefined : value === 'flip' 
+                      })}
+                      style={{ width: 320 }}
+                    >
+                      <Option value="auto">Auto-detect (flip for credit cards)</Option>
+                      <Option value="normal">Normal (positive = income, negative = expense)</Option>
+                      <Option value="flip">Flipped (positive = expense, negative = income)</Option>
+                    </Select>
+                    <Button 
+                      onClick={handlePreviewImport}
+                      loading={importLoading}
+                    >
+                      Re-preview
+                    </Button>
+                  </Space>
+                </Form.Item>
+                <Form.Item style={{ marginBottom: 8 }}>
                   <Checkbox
                     checked={importOptions.autoCategorize}
                     onChange={(e) => setImportOptions({ ...importOptions, autoCategorize: e.target.checked })}
@@ -954,7 +1007,7 @@ const Transactions: React.FC = () => {
                     Auto-categorize transactions based on merchant/description
                   </Checkbox>
                 </Form.Item>
-                <Form.Item>
+                <Form.Item style={{ marginBottom: 8 }}>
                   <Checkbox
                     checked={importOptions.skipDuplicates}
                     onChange={(e) => setImportOptions({ ...importOptions, skipDuplicates: e.target.checked })}

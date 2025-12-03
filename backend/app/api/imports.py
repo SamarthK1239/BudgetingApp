@@ -719,27 +719,19 @@ def parse_ofx_file(content: bytes) -> List[ImportedTransaction]:
     return transactions
 
 
-def adjust_for_credit_card(transactions: List[ImportedTransaction], account: Account) -> List[ImportedTransaction]:
+def flip_transaction_types(transactions: List[ImportedTransaction]) -> List[ImportedTransaction]:
     """
-    Adjust transaction types for credit card accounts.
+    Flip/invert transaction types for all transactions.
     
-    For credit cards, the logic is inverted:
-    - Positive amounts (charges/purchases) = EXPENSE (money you spent/owe)
-    - Negative amounts (payments/credits) = INCOME (reducing what you owe)
+    This is useful when:
+    - Importing to credit card accounts (where charges are expenses)
+    - Dealing with banks that use opposite sign conventions
+      (e.g., Chase shows expenses as negative, Discover shows them as positive)
     
-    Most bank CSV exports show credit card charges as positive numbers,
-    so we need to flip the transaction type interpretation.
+    INCOME becomes EXPENSE and vice versa.
     """
-    from app.models.account import AccountType
-    
-    if account.account_type != AccountType.CREDIT_CARD:
-        return transactions
-    
     adjusted = []
     for trans in transactions:
-        # For credit cards, flip the transaction type
-        # Charges (shown as positive in most CSVs) should be expenses
-        # Payments/credits (shown as negative) should be income
         new_type = (
             TransactionType.EXPENSE 
             if trans.transaction_type == TransactionType.INCOME 
@@ -759,6 +751,15 @@ def adjust_for_credit_card(transactions: List[ImportedTransaction], account: Acc
         ))
     
     return adjusted
+
+
+def should_auto_flip_for_account(account: Account) -> bool:
+    """
+    Determine if transaction types should be auto-flipped based on account type.
+    Returns True for credit card accounts by default.
+    """
+    from app.models.account import AccountType
+    return account.account_type == AccountType.CREDIT_CARD
 
 
 def check_duplicates(transactions: List[ImportedTransaction], account_id: int, db: Session) -> List[bool]:
@@ -784,12 +785,18 @@ async def preview_import(
     file: UploadFile = File(...),
     account_id: int = Form(...),
     date_format: str = Form("%m/%d/%Y"),
+    flip_types: Optional[bool] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
     Preview transactions from an uploaded bank file.
     Supports CSV, OFX, and QFX formats.
     Auto-categorizes transactions based on merchant/description keywords.
+    
+    Args:
+        flip_types: If True, flip income/expense types. If False, don't flip.
+                   If None (default), auto-detect based on account type
+                   (flips for credit cards).
     """
     # Verify account exists
     account = db.query(Account).filter(Account.id == account_id).first()
@@ -824,8 +831,11 @@ async def preview_import(
     if not transactions:
         raise HTTPException(status_code=400, detail="No transactions found in file")
     
-    # Adjust transaction types for credit card accounts
-    transactions = adjust_for_credit_card(transactions, account)
+    # Determine whether to flip transaction types
+    # If flip_types is explicitly set, use that; otherwise auto-detect based on account type
+    should_flip = flip_types if flip_types is not None else should_auto_flip_for_account(account)
+    if should_flip:
+        transactions = flip_transaction_types(transactions)
     
     # Auto-categorize transactions
     categorized_count = 0
@@ -863,11 +873,17 @@ async def execute_import(
     skip_duplicates: bool = Form(True),
     date_format: str = Form("%m/%d/%Y"),
     auto_categorize: bool = Form(True),
+    flip_types: Optional[bool] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
     Import transactions from an uploaded bank file.
     Auto-categorizes transactions based on merchant/description keywords.
+    
+    Args:
+        flip_types: If True, flip income/expense types. If False, don't flip.
+                   If None (default), auto-detect based on account type
+                   (flips for credit cards).
     """
     # Verify account exists
     account = db.query(Account).filter(Account.id == account_id).first()
@@ -905,8 +921,11 @@ async def execute_import(
     if not transactions:
         raise HTTPException(status_code=400, detail="No transactions found in file")
     
-    # Adjust transaction types for credit card accounts
-    transactions = adjust_for_credit_card(transactions, account)
+    # Determine whether to flip transaction types
+    # If flip_types is explicitly set, use that; otherwise auto-detect based on account type
+    should_flip = flip_types if flip_types is not None else should_auto_flip_for_account(account)
+    if should_flip:
+        transactions = flip_transaction_types(transactions)
     
     # Auto-categorize transactions if enabled
     if auto_categorize:
