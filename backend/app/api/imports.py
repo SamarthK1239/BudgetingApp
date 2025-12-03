@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.transaction import Transaction, TransactionType
 from app.models.account import Account
 from app.models.category import Category, CategoryType
+from app.models.category_keyword import CategoryKeyword
 
 router = APIRouter()
 
@@ -434,14 +435,53 @@ class ImportResult(BaseModel):
     auto_categorized_count: int
 
 
+def find_category_by_user_keywords(text: str, transaction_type: TransactionType, db: Session) -> Optional[Tuple[int, str]]:
+    """
+    Find a matching category based on user-defined keyword rules.
+    Returns (category_id, category_name) or None if no match.
+    User-defined keywords take priority over built-in ones.
+    """
+    if not text:
+        return None
+    
+    # Get active user keywords ordered by priority (highest first)
+    user_keywords = db.query(CategoryKeyword).filter(
+        CategoryKeyword.is_active == True
+    ).order_by(CategoryKeyword.priority.desc()).all()
+    
+    for kw in user_keywords:
+        if kw.matches(text):
+            # Verify the category exists and matches transaction type
+            category = db.query(Category).filter(Category.id == kw.category_id).first()
+            if category:
+                expected_type = CategoryType.INCOME if transaction_type == TransactionType.INCOME else CategoryType.EXPENSE
+                if category.category_type == expected_type:
+                    # Get full category name
+                    if category.parent_id:
+                        parent = db.query(Category).filter(Category.id == category.parent_id).first()
+                        full_name = f"{parent.name} > {category.name}" if parent else category.name
+                    else:
+                        full_name = category.name
+                    return (category.id, full_name)
+    
+    return None
+
+
 def find_category_by_keywords(text: str, transaction_type: TransactionType, db: Session) -> Optional[Tuple[int, str]]:
     """
     Find a matching category based on keywords in the transaction description.
+    First checks user-defined keywords, then falls back to built-in keywords.
     Returns (category_id, category_name) or None if no match.
     """
     if not text:
         return None
     
+    # First try user-defined keywords (higher priority)
+    result = find_category_by_user_keywords(text, transaction_type, db)
+    if result:
+        return result
+    
+    # Fall back to built-in keywords
     text_lower = text.lower()
     
     # Try to find a matching keyword
@@ -486,6 +526,33 @@ def auto_categorize_transaction(trans: ImportedTransaction, db: Session) -> Impo
     return trans
 
 
+def find_matching_column(normalized_headers: dict, patterns: list) -> Optional[str]:
+    """
+    Find a matching column using flexible matching.
+    First tries exact match, then partial/fuzzy matching.
+    Returns the original column name from the CSV.
+    """
+    # First try exact match
+    for pattern in patterns:
+        if pattern in normalized_headers:
+            return normalized_headers[pattern]
+    
+    # Then try partial match (column contains pattern or pattern contains column)
+    for pattern in patterns:
+        for header_lower, header_orig in normalized_headers.items():
+            # Check if pattern is contained in header or vice versa
+            if pattern in header_lower or header_lower in pattern:
+                return header_orig
+            # Check for common abbreviations/variations
+            # Remove periods, spaces, and common suffixes for matching
+            clean_pattern = pattern.replace('.', '').replace(' ', '').replace('_', '')
+            clean_header = header_lower.replace('.', '').replace(' ', '').replace('_', '')
+            if clean_pattern in clean_header or clean_header in clean_pattern:
+                return header_orig
+    
+    return None
+
+
 def parse_csv_file(content: str, date_format: str = "%m/%d/%Y") -> List[ImportedTransaction]:
     """
     Parse CSV file content into transactions.
@@ -500,44 +567,25 @@ def parse_csv_file(content: str, date_format: str = "%m/%d/%Y") -> List[Imported
     else:
         raise ValueError("CSV file has no headers")
     
-    # Common column name mappings
-    date_columns = ['date', 'transaction date', 'posted date', 'trans date', 'posting date']
-    description_columns = ['description', 'memo', 'narrative', 'details', 'transaction description', 'name']
-    amount_columns = ['amount', 'transaction amount', 'value']
-    debit_columns = ['debit', 'withdrawal', 'withdrawals', 'debit amount']
-    credit_columns = ['credit', 'deposit', 'deposits', 'credit amount']
+    # Common column name mappings (in priority order)
+    date_columns = ['date', 'transaction date', 'posted date', 'trans date', 'posting date', 
+                    'trans. date', 'post date', 'transdate', 'postdate', 'trans.date', 'trans']
+    description_columns = ['description', 'memo', 'narrative', 'details', 'transaction description', 
+                          'name', 'desc', 'merchant', 'payee', 'merchant name']
+    amount_columns = ['amount', 'transaction amount', 'value', 'sum', 'total']
+    debit_columns = ['debit', 'withdrawal', 'withdrawals', 'debit amount', 'debit amt', 'expense']
+    credit_columns = ['credit', 'deposit', 'deposits', 'credit amount', 'credit amt', 'income']
     
-    # Find matching columns
-    date_col = None
-    desc_col = None
-    amount_col = None
-    debit_col = None
-    credit_col = None
+    # Find matching columns using flexible matching
+    date_col = find_matching_column(normalized_headers, date_columns)
+    desc_col = find_matching_column(normalized_headers, description_columns)
+    amount_col = find_matching_column(normalized_headers, amount_columns)
+    debit_col = find_matching_column(normalized_headers, debit_columns)
+    credit_col = find_matching_column(normalized_headers, credit_columns)
     
-    for col_name in date_columns:
-        if col_name in normalized_headers:
-            date_col = normalized_headers[col_name]
-            break
-    
-    for col_name in description_columns:
-        if col_name in normalized_headers:
-            desc_col = normalized_headers[col_name]
-            break
-    
-    for col_name in amount_columns:
-        if col_name in normalized_headers:
-            amount_col = normalized_headers[col_name]
-            break
-    
-    for col_name in debit_columns:
-        if col_name in normalized_headers:
-            debit_col = normalized_headers[col_name]
-            break
-    
-    for col_name in credit_columns:
-        if col_name in normalized_headers:
-            credit_col = normalized_headers[col_name]
-            break
+    # Log detected columns for debugging
+    print(f"CSV Headers: {list(normalized_headers.keys())}")
+    print(f"Detected columns - date: {date_col}, desc: {desc_col}, amount: {amount_col}, debit: {debit_col}, credit: {credit_col}")
     
     if not date_col:
         raise ValueError("Could not find date column in CSV")
@@ -625,6 +673,51 @@ def parse_csv_file(content: str, date_format: str = "%m/%d/%Y") -> List[Imported
     return transactions
 
 
+def preprocess_ofx_content(content: bytes) -> bytes:
+    """
+    Preprocess OFX/QFX content to fix common formatting issues.
+    
+    Some banks (like Wells Fargo) output OFX files with:
+    - All headers on a single line without newlines
+    - No separation between header section and XML body
+    
+    This function normalizes the content so ofxparse can handle it.
+    """
+    try:
+        text = content.decode('utf-8')
+    except UnicodeDecodeError:
+        try:
+            text = content.decode('latin-1')
+        except:
+            text = content.decode('utf-8', errors='ignore')
+    
+    # Check if headers are on a single line (common Wells Fargo format)
+    # OFX headers end before the <OFX> tag
+    if '<OFX>' in text and 'OFXHEADER:' in text:
+        # Find where headers end and XML begins
+        ofx_start = text.find('<OFX>')
+        header_part = text[:ofx_start]
+        xml_part = text[ofx_start:]
+        
+        # If headers don't have newlines, add them
+        if '\n' not in header_part.strip():
+            # Known OFX header fields
+            header_fields = [
+                'OFXHEADER:', 'DATA:', 'VERSION:', 'SECURITY:', 'ENCODING:',
+                'CHARSET:', 'COMPRESSION:', 'OLDFILEUID:', 'NEWFILEUID:'
+            ]
+            
+            # Insert newlines before each header field
+            for field in header_fields:
+                if field in header_part and not header_part.startswith(field):
+                    header_part = header_part.replace(field, '\n' + field)
+            
+            # Reconstruct the content
+            text = header_part.strip() + '\n\n' + xml_part
+    
+    return text.encode('utf-8')
+
+
 def parse_ofx_file(content: bytes) -> List[ImportedTransaction]:
     """Parse OFX/QFX file content into transactions."""
     try:
@@ -633,6 +726,9 @@ def parse_ofx_file(content: bytes) -> List[ImportedTransaction]:
         raise HTTPException(status_code=500, detail="OFX parsing library not available")
     
     transactions = []
+    
+    # Preprocess content to fix formatting issues
+    content = preprocess_ofx_content(content)
     
     try:
         ofx = OfxParser.parse(io.BytesIO(content))
@@ -671,6 +767,49 @@ def parse_ofx_file(content: bytes) -> List[ImportedTransaction]:
     return transactions
 
 
+def flip_transaction_types(transactions: List[ImportedTransaction]) -> List[ImportedTransaction]:
+    """
+    Flip/invert transaction types for all transactions.
+    
+    This is useful when:
+    - Importing to credit card accounts (where charges are expenses)
+    - Dealing with banks that use opposite sign conventions
+      (e.g., Chase shows expenses as negative, Discover shows them as positive)
+    
+    INCOME becomes EXPENSE and vice versa.
+    """
+    adjusted = []
+    for trans in transactions:
+        new_type = (
+            TransactionType.EXPENSE 
+            if trans.transaction_type == TransactionType.INCOME 
+            else TransactionType.INCOME
+        )
+        
+        adjusted.append(ImportedTransaction(
+            transaction_date=trans.transaction_date,
+            payee=trans.payee,
+            description=trans.description,
+            amount=trans.amount,
+            transaction_type=new_type,
+            original_description=trans.original_description,
+            fit_id=trans.fit_id,
+            suggested_category_id=trans.suggested_category_id,
+            suggested_category_name=trans.suggested_category_name
+        ))
+    
+    return adjusted
+
+
+def should_auto_flip_for_account(account: Account) -> bool:
+    """
+    Determine if transaction types should be auto-flipped based on account type.
+    Returns True for credit card accounts by default.
+    """
+    from app.models.account import AccountType
+    return account.account_type == AccountType.CREDIT_CARD
+
+
 def check_duplicates(transactions: List[ImportedTransaction], account_id: int, db: Session) -> List[bool]:
     """Check which transactions might be duplicates."""
     duplicates = []
@@ -694,12 +833,18 @@ async def preview_import(
     file: UploadFile = File(...),
     account_id: int = Form(...),
     date_format: str = Form("%m/%d/%Y"),
+    flip_types: Optional[bool] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
     Preview transactions from an uploaded bank file.
     Supports CSV, OFX, and QFX formats.
     Auto-categorizes transactions based on merchant/description keywords.
+    
+    Args:
+        flip_types: If True, flip income/expense types. If False, don't flip.
+                   If None (default), auto-detect based on account type
+                   (flips for credit cards).
     """
     # Verify account exists
     account = db.query(Account).filter(Account.id == account_id).first()
@@ -733,6 +878,12 @@ async def preview_import(
     
     if not transactions:
         raise HTTPException(status_code=400, detail="No transactions found in file")
+    
+    # Determine whether to flip transaction types
+    # If flip_types is explicitly set, use that; otherwise auto-detect based on account type
+    should_flip = flip_types if flip_types is not None else should_auto_flip_for_account(account)
+    if should_flip:
+        transactions = flip_transaction_types(transactions)
     
     # Auto-categorize transactions
     categorized_count = 0
@@ -770,11 +921,17 @@ async def execute_import(
     skip_duplicates: bool = Form(True),
     date_format: str = Form("%m/%d/%Y"),
     auto_categorize: bool = Form(True),
+    flip_types: Optional[bool] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
     Import transactions from an uploaded bank file.
     Auto-categorizes transactions based on merchant/description keywords.
+    
+    Args:
+        flip_types: If True, flip income/expense types. If False, don't flip.
+                   If None (default), auto-detect based on account type
+                   (flips for credit cards).
     """
     # Verify account exists
     account = db.query(Account).filter(Account.id == account_id).first()
@@ -811,6 +968,12 @@ async def execute_import(
     
     if not transactions:
         raise HTTPException(status_code=400, detail="No transactions found in file")
+    
+    # Determine whether to flip transaction types
+    # If flip_types is explicitly set, use that; otherwise auto-detect based on account type
+    should_flip = flip_types if flip_types is not None else should_auto_flip_for_account(account)
+    if should_flip:
+        transactions = flip_transaction_types(transactions)
     
     # Auto-categorize transactions if enabled
     if auto_categorize:

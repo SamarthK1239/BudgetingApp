@@ -3,7 +3,7 @@
  * Handles window management, application lifecycle, and IPC communication
  */
 
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 const BackendManager = require('./backend');
@@ -24,7 +24,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     },
     show: false,
-    backgroundColor: '#f0f2f5'
+    backgroundColor: '#0a0a0a',
+    autoHideMenuBar: true,  // Hide menu bar by default, show with Alt key
   });
 
   // Load the app

@@ -38,6 +38,7 @@ import {
   UploadOutlined,
   FileTextOutlined,
   CheckCircleOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -82,6 +83,9 @@ const Transactions: React.FC = () => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
+  // Pagination state
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+
   // Import modal state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importStep, setImportStep] = useState(0);
@@ -93,9 +97,19 @@ const Transactions: React.FC = () => {
     defaultCategoryId: undefined as number | undefined,
     dateFormat: '%m/%d/%Y',
     autoCategorize: true,
+    flipTypes: undefined as boolean | undefined,
   });
   const [importResult, setImportResult] = useState<any>(null);
   const [importLoading, setImportLoading] = useState(false);
+
+  // Create keyword rule modal state
+  const [isKeywordModalOpen, setIsKeywordModalOpen] = useState(false);
+  const [keywordFromTransaction, setKeywordFromTransaction] = useState<{
+    payee: string;
+    categoryId?: number;
+    transactionType: TransactionType;
+  } | null>(null);
+  const [keywordForm] = Form.useForm();
 
   // Fetch transactions
   const { data: transactions = [], isLoading } = useQuery({
@@ -157,6 +171,23 @@ const Transactions: React.FC = () => {
     },
   });
 
+  // Create keyword rule mutation
+  const createKeywordMutation = useMutation({
+    mutationFn: (data: { keyword: string; category_id: number; priority?: number; match_mode?: 'contains' | 'starts_with' | 'exact' }) =>
+      apiClient.createKeyword(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['keywords'] });
+      queryClient.invalidateQueries({ queryKey: ['keywordsCount'] });
+      message.success('Keyword rule created! Future transactions with this payee will be auto-categorized.');
+      setIsKeywordModalOpen(false);
+      setKeywordFromTransaction(null);
+      keywordForm.resetFields();
+    },
+    onError: (error: any) => {
+      message.error(error.message || 'Failed to create keyword rule');
+    },
+  });
+
   const handleOpenModal = (transaction?: Transaction) => {
     if (transaction) {
       setEditingTransaction(transaction);
@@ -199,6 +230,29 @@ const Transactions: React.FC = () => {
 
   const handleDelete = (id: number) => {
     deleteMutation.mutate(id);
+  };
+
+  // Open keyword rule modal from transaction
+  const handleOpenKeywordModal = (payee: string, categoryId?: number, txType: TransactionType = TransactionType.EXPENSE) => {
+    setKeywordFromTransaction({
+      payee: payee.toLowerCase().trim(),
+      categoryId,
+      transactionType: txType,
+    });
+    keywordForm.setFieldsValue({
+      keyword: payee.toLowerCase().trim(),
+      category_id: categoryId,
+      match_mode: 'contains',
+    });
+    setIsKeywordModalOpen(true);
+  };
+
+  const handleCreateKeywordRule = (values: any) => {
+    createKeywordMutation.mutate({
+      keyword: values.keyword,
+      category_id: values.category_id,
+      match_mode: values.match_mode || 'contains',
+    });
   };
 
   const handleDateRangeChange = (dates: any) => {
@@ -268,6 +322,7 @@ const Transactions: React.FC = () => {
       defaultCategoryId: undefined,
       dateFormat: '%m/%d/%Y',
       autoCategorize: true,
+      flipTypes: undefined,
     });
   };
 
@@ -296,7 +351,8 @@ const Transactions: React.FC = () => {
       const preview = await apiClient.previewImport(
         importFile,
         importAccountId,
-        importOptions.dateFormat
+        importOptions.dateFormat,
+        importOptions.flipTypes
       );
       setImportPreview(preview);
       setImportStep(1);
@@ -317,6 +373,7 @@ const Transactions: React.FC = () => {
         defaultCategoryId: importOptions.defaultCategoryId,
         dateFormat: importOptions.dateFormat,
         autoCategorize: importOptions.autoCategorize,
+        flipTypes: importOptions.flipTypes,
       });
       setImportResult(result);
       setImportStep(2);
@@ -416,9 +473,19 @@ const Transactions: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      width: 100,
+      width: 130,
       render: (_: any, record: Transaction) => (
         <Space>
+          {/* Create Rule - only for income/expense with payee */}
+          {record.payee && record.transaction_type !== TransactionType.TRANSFER && (
+            <Tooltip title="Create auto-categorization rule">
+              <Button
+                type="text"
+                icon={<ThunderboltOutlined />}
+                onClick={() => handleOpenKeywordModal(record.payee!, record.category_id, record.transaction_type)}
+              />
+            </Tooltip>
+          )}
           <Tooltip title="Edit">
             <Button
               type="text"
@@ -514,9 +581,12 @@ const Transactions: React.FC = () => {
           rowKey="id"
           loading={isLoading}
           pagination={{
-            pageSize: 20,
+            current: pagination.current,
+            pageSize: pagination.pageSize,
             showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} transactions`,
+            onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
           }}
         />
       </Card>
@@ -686,6 +756,32 @@ const Transactions: React.FC = () => {
             <Input.TextArea rows={2} placeholder="Optional notes about this transaction" />
           </Form.Item>
 
+          {/* Create Rule Option - show when editing and has payee */}
+          {editingTransaction && editingTransaction.payee && transactionType !== TransactionType.TRANSFER && (
+            <Alert
+              message="Auto-categorize similar transactions"
+              description={
+                <Space direction="vertical" size={4}>
+                  <span>Create a rule to automatically categorize future transactions from "{editingTransaction.payee}"</span>
+                  <Button 
+                    type="link" 
+                    icon={<ThunderboltOutlined />} 
+                    style={{ padding: 0 }}
+                    onClick={() => {
+                      const categoryId = form.getFieldValue('category_id');
+                      handleOpenKeywordModal(editingTransaction.payee!, categoryId, transactionType);
+                    }}
+                  >
+                    Create Auto-Categorization Rule
+                  </Button>
+                </Space>
+              }
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           <Divider />
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
@@ -780,6 +876,23 @@ const Transactions: React.FC = () => {
                   <Option value="%m-%d-%Y">MM-DD-YYYY</Option>
                 </Select>
               </Form.Item>
+
+              <Form.Item 
+                label="Transaction Type Handling"
+                extra="Different banks use different conventions. If expenses appear as income (or vice versa), try flipping the types."
+              >
+                <Select
+                  value={importOptions.flipTypes === undefined ? 'auto' : importOptions.flipTypes ? 'flip' : 'normal'}
+                  onChange={(value) => setImportOptions({ 
+                    ...importOptions, 
+                    flipTypes: value === 'auto' ? undefined : value === 'flip' 
+                  })}
+                >
+                  <Option value="auto">Auto-detect (flip for credit cards)</Option>
+                  <Option value="normal">Normal (positive = income, negative = expense)</Option>
+                  <Option value="flip">Flipped (positive = expense, negative = income)</Option>
+                </Select>
+              </Form.Item>
             </Form>
 
             <div style={{ textAlign: 'right', marginTop: 16 }}>
@@ -860,7 +973,33 @@ const Transactions: React.FC = () => {
 
             <Card title="Import Options" size="small" style={{ marginBottom: 16 }}>
               <Form layout="vertical">
-                <Form.Item>
+                <Form.Item 
+                  label="Transaction Type Handling"
+                  extra="If income/expenses look reversed, change this setting and click 'Re-preview'"
+                  style={{ marginBottom: 12 }}
+                >
+                  <Space>
+                    <Select
+                      value={importOptions.flipTypes === undefined ? 'auto' : importOptions.flipTypes ? 'flip' : 'normal'}
+                      onChange={(value) => setImportOptions({ 
+                        ...importOptions, 
+                        flipTypes: value === 'auto' ? undefined : value === 'flip' 
+                      })}
+                      style={{ width: 320 }}
+                    >
+                      <Option value="auto">Auto-detect (flip for credit cards)</Option>
+                      <Option value="normal">Normal (positive = income, negative = expense)</Option>
+                      <Option value="flip">Flipped (positive = expense, negative = income)</Option>
+                    </Select>
+                    <Button 
+                      onClick={handlePreviewImport}
+                      loading={importLoading}
+                    >
+                      Re-preview
+                    </Button>
+                  </Space>
+                </Form.Item>
+                <Form.Item style={{ marginBottom: 8 }}>
                   <Checkbox
                     checked={importOptions.autoCategorize}
                     onChange={(e) => setImportOptions({ ...importOptions, autoCategorize: e.target.checked })}
@@ -868,7 +1007,7 @@ const Transactions: React.FC = () => {
                     Auto-categorize transactions based on merchant/description
                   </Checkbox>
                 </Form.Item>
-                <Form.Item>
+                <Form.Item style={{ marginBottom: 8 }}>
                   <Checkbox
                     checked={importOptions.skipDuplicates}
                     onChange={(e) => setImportOptions({ ...importOptions, skipDuplicates: e.target.checked })}
@@ -1031,6 +1170,94 @@ const Transactions: React.FC = () => {
             ]}
           />
         )}
+      </Modal>
+
+      {/* Create Keyword Rule Modal */}
+      <Modal
+        title="Create Auto-Categorization Rule"
+        open={isKeywordModalOpen}
+        onCancel={() => {
+          setIsKeywordModalOpen(false);
+          setKeywordFromTransaction(null);
+          keywordForm.resetFields();
+        }}
+        footer={null}
+        destroyOnClose
+        width={500}
+      >
+        <Alert
+          message="How it works"
+          description="When importing transactions, if the payee or description contains this keyword, the transaction will be automatically assigned to the selected category."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+
+        <Form form={keywordForm} layout="vertical" onFinish={handleCreateKeywordRule}>
+          <Form.Item
+            name="keyword"
+            label="Keyword to match"
+            rules={[{ required: true, message: 'Please enter a keyword' }]}
+            extra="This text will be matched against transaction payee/description"
+          >
+            <Input placeholder="e.g., starbucks" />
+          </Form.Item>
+
+          <Form.Item
+            name="category_id"
+            label="Assign to Category"
+            rules={[{ required: true, message: 'Please select a category' }]}
+          >
+            <Select placeholder="Select category" showSearch optionFilterProp="label">
+              {(keywordFromTransaction?.transactionType === TransactionType.INCOME
+                ? categories.filter((c: Category) => c.category_type === 'income')
+                : categories.filter((c: Category) => c.category_type === 'expense')
+              ).map((cat: Category) => (
+                <Select.OptGroup key={cat.id} label={cat.name}>
+                  {cat.subcategories?.map((sub: Category) => (
+                    <Option key={sub.id} value={sub.id} label={`${cat.name} - ${sub.name}`}>
+                      {sub.name}
+                    </Option>
+                  ))}
+                </Select.OptGroup>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="match_mode"
+            label="Match Mode"
+            initialValue="contains"
+          >
+            <Select>
+              <Option value="contains">Contains (default)</Option>
+              <Option value="starts_with">Starts With</Option>
+              <Option value="exact">Exact Match</Option>
+            </Select>
+          </Form.Item>
+
+          <Divider />
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => {
+                setIsKeywordModalOpen(false);
+                setKeywordFromTransaction(null);
+                keywordForm.resetFields();
+              }}>
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                htmlType="submit"
+                icon={<ThunderboltOutlined />}
+                loading={createKeywordMutation.isPending}
+              >
+                Create Rule
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );

@@ -19,12 +19,17 @@ import {
   Tooltip,
   Switch,
   Empty,
+  Statistic,
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   ExclamationCircleOutlined,
+  DollarOutlined,
+  ShoppingCartOutlined,
+  WarningOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -39,6 +44,13 @@ const budgetPeriodLabels: Record<BudgetPeriod, string> = {
   [BudgetPeriod.MONTHLY]: 'Monthly',
   [BudgetPeriod.QUARTERLY]: 'Quarterly',
   [BudgetPeriod.ANNUAL]: 'Annual',
+};
+
+const budgetPeriodColors: Record<BudgetPeriod, string> = {
+  [BudgetPeriod.WEEKLY]: 'cyan',
+  [BudgetPeriod.MONTHLY]: 'blue',
+  [BudgetPeriod.QUARTERLY]: 'purple',
+  [BudgetPeriod.ANNUAL]: 'magenta',
 };
 
 const getProgressStatus = (percentage: number): 'success' | 'normal' | 'exception' => {
@@ -189,32 +201,35 @@ const Budgets: React.FC = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <Card>
-            <div style={{ textAlign: 'center' }}>
-              <Text type="secondary">Total Budgeted</Text>
-              <Title level={3} style={{ margin: '8px 0', color: '#1890ff' }}>
-                ${totalBudgeted.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </Title>
-            </div>
+            <Statistic
+              title="Total Budgeted"
+              value={totalBudgeted}
+              precision={2}
+              prefix={<DollarOutlined />}
+              valueStyle={{ color: '#1890ff' }}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <div style={{ textAlign: 'center' }}>
-              <Text type="secondary">Total Spent</Text>
-              <Title level={3} style={{ margin: '8px 0', color: totalSpent > totalBudgeted ? '#ff4d4f' : '#52c41a' }}>
-                ${totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </Title>
-            </div>
+            <Statistic
+              title="Total Spent"
+              value={totalSpent}
+              precision={2}
+              prefix={<ShoppingCartOutlined />}
+              valueStyle={{ color: totalSpent > totalBudgeted ? '#ff4d4f' : '#52c41a' }}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <div style={{ textAlign: 'center' }}>
-              <Text type="secondary">Over Budget</Text>
-              <Title level={3} style={{ margin: '8px 0', color: overBudgetCount > 0 ? '#ff4d4f' : '#52c41a' }}>
-                {overBudgetCount} {overBudgetCount === 1 ? 'Budget' : 'Budgets'}
-              </Title>
-            </div>
+            <Statistic
+              title="Over Budget"
+              value={overBudgetCount}
+              suffix={overBudgetCount === 1 ? 'Budget' : 'Budgets'}
+              prefix={<WarningOutlined />}
+              valueStyle={{ color: overBudgetCount > 0 ? '#ff4d4f' : '#52c41a' }}
+            />
           </Card>
         </Col>
       </Row>
@@ -237,9 +252,14 @@ const Budgets: React.FC = () => {
             <Col xs={24} sm={12} lg={8} key={budget.id}>
               <Card
                 hoverable
+                style={{ height: '100%' }}
+                styles={{ 
+                  body: { paddingBottom: 16 },
+                  actions: { borderTop: 'none', background: 'transparent' }
+                }}
                 actions={[
                   <Tooltip title="Edit" key="edit">
-                    <EditOutlined onClick={() => handleOpenModal(budget)} />
+                    <Button type="text" icon={<EditOutlined />} onClick={() => handleOpenModal(budget)} />
                   </Tooltip>,
                   <Popconfirm
                     key="delete"
@@ -250,66 +270,80 @@ const Budgets: React.FC = () => {
                     cancelText="No"
                   >
                     <Tooltip title="Delete">
-                      <DeleteOutlined style={{ color: '#ff4d4f' }} />
+                      <Button type="text" danger icon={<DeleteOutlined />} />
                     </Tooltip>
                   </Popconfirm>,
                 ]}
               >
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <Title level={4} style={{ margin: 0 }}>{budget.name}</Title>
-                      <Text type="secondary">{getCategoryName(budget.category_id)}</Text>
-                    </div>
-                    <Tag color={
-                      budget.percentage >= 100 ? 'red' :
-                      budget.percentage >= 80 ? 'orange' : 'green'
-                    }>
-                      {budgetPeriodLabels[budget.period_type]}
-                    </Tag>
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                  <div>
+                    <Title level={4} style={{ margin: 0, marginBottom: 4 }}>{budget.name}</Title>
+                    <Text type="secondary" style={{ fontSize: 13 }}>{getCategoryName(budget.category_id)}</Text>
                   </div>
+                  <Tag color={budgetPeriodColors[budget.period_type]} style={{ margin: 0 }}>
+                    {budgetPeriodLabels[budget.period_type]}
+                  </Tag>
                 </div>
 
-                <Progress
-                  percent={Math.min(budget.percentage, 100)}
-                  status={getProgressStatus(budget.percentage)}
-                  strokeColor={getProgressColor(budget.percentage)}
-                  format={() => `${budget.percentage.toFixed(1)}%`}
-                />
-
-                <Row gutter={16} style={{ marginTop: 16 }}>
-                  <Col span={12}>
-                    <Text type="secondary">Spent</Text>
-                    <div style={{ fontWeight: 'bold', color: getProgressColor(budget.percentage) }}>
+                {/* Progress Section */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 13, color: getProgressColor(budget.percentage), fontWeight: 600 }}>
                       ${budget.spent.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </div>
-                  </Col>
-                  <Col span={12}>
-                    <Text type="secondary">Budget</Text>
-                    <div style={{ fontWeight: 'bold' }}>
+                    </Text>
+                    <Text style={{ fontSize: 13, fontWeight: 500 }}>
                       ${budget.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </div>
-                  </Col>
-                </Row>
-
-                <div style={{ marginTop: 12, fontSize: 12, color: '#8c8c8c' }}>
-                  Period: {dayjs(budget.period_start).format('MMM D')} - {dayjs(budget.period_end).format('MMM D, YYYY')}
+                    </Text>
+                  </div>
+                  <Progress
+                    percent={Math.min(budget.percentage, 100)}
+                    status={getProgressStatus(budget.percentage)}
+                    strokeColor={getProgressColor(budget.percentage)}
+                    strokeWidth={10}
+                    showInfo={false}
+                    style={{ marginBottom: 4 }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Spent</Text>
+                    <Text style={{ 
+                      fontSize: 13, 
+                      fontWeight: 600,
+                      color: getProgressColor(budget.percentage)
+                    }}>
+                      {budget.percentage.toFixed(1)}%
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Budget</Text>
+                  </div>
                 </div>
 
+                {/* Period Info */}
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 6,
+                  padding: '8px 12px',
+                  background: 'rgba(255,255,255,0.04)',
+                  borderRadius: 6,
+                  marginBottom: budget.remaining < 0 || (budget.allow_rollover && budget.rollover_amount !== 0) ? 12 : 0
+                }}>
+                  <CalendarOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />
+                  <Text style={{ fontSize: 12, color: '#8c8c8c' }}>
+                    {dayjs(budget.period_start).format('MMM D')} - {dayjs(budget.period_end).format('MMM D, YYYY')}
+                  </Text>
+                </div>
+
+                {/* Status Tags */}
                 {budget.remaining < 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    <Tag icon={<ExclamationCircleOutlined />} color="error">
-                      Over by ${Math.abs(budget.remaining).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </Tag>
-                  </div>
+                  <Tag icon={<ExclamationCircleOutlined />} color="error" style={{ marginTop: 0 }}>
+                    Over by ${Math.abs(budget.remaining).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </Tag>
                 )}
 
                 {budget.allow_rollover && budget.rollover_amount !== 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    <Tag color="blue">
-                      Rollover: ${budget.rollover_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </Tag>
-                  </div>
+                  <Tag color="blue" style={{ marginTop: budget.remaining < 0 ? 8 : 0 }}>
+                    Rollover: ${budget.rollover_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </Tag>
                 )}
               </Card>
             </Col>

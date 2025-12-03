@@ -20,7 +20,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s, color 0.3s;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 code {
@@ -30,42 +30,42 @@ code {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: rgba(0, 0, 0, 0.35);
+  background-clip: content-box;
 }
 
-/* Dark mode scrollbar - using Ant Design's dark class */
-.dark-theme ::-webkit-scrollbar-track,
-[data-theme='dark'] ::-webkit-scrollbar-track {
-  background: #141414;
-}
-
-.dark-theme ::-webkit-scrollbar-thumb,
-[data-theme='dark'] ::-webkit-scrollbar-thumb {
-  background: #434343;
-}
-
-.dark-theme ::-webkit-scrollbar-thumb:hover,
-[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
-  background: #595959;
+/* Dark mode scrollbar */
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    background-clip: content-box;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+    background-clip: content-box;
+  }
 }
 
 /* Ant Design component overrides for consistency */
 .ant-layout {
-  min-height: 100vh;
+  overflow: hidden;
 }
 
 .ant-layout-content {
@@ -73,19 +73,32 @@ code {
   flex-direction: column;
 }
 
-/* Card styling consistency */
+/* Card improvements */
 .ant-card {
-  height: 100%;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-/* Table row hover consistency */
+.ant-card-hoverable:hover {
+  transform: translateY(-2px);
+}
+
+/* Table improvements */
 .ant-table-wrapper {
   overflow: auto;
+}
+
+.ant-table-thead > tr > th {
+  font-weight: 600;
 }
 
 /* Modal styling */
 .ant-modal-content {
   overflow: hidden;
+  border-radius: 12px;
+}
+
+.ant-modal-header {
+  border-radius: 12px 12px 0 0;
 }
 
 /* Sider menu styling */
@@ -93,13 +106,50 @@ code {
   border-inline-end: none !important;
 }
 
-/* Fix spacing issues */
+.ant-menu-item {
+  transition: all 0.2s ease;
+}
+
+/* Button improvements */
+.ant-btn {
+  transition: all 0.2s ease;
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
+/* Tag improvements */
+.ant-tag {
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Statistic styling */
 .ant-statistic-title {
   margin-bottom: 4px;
+  font-weight: 500;
 }
 
 .ant-statistic-content {
-  font-size: 24px;
+  font-weight: 600;
+}
+
+/* Progress bar improvements */
+.ant-progress-inner {
+  border-radius: 100px !important;
+}
+
+.ant-progress-bg {
+  border-radius: 100px !important;
+}
+
+/* Input focus states */
+.ant-input:focus,
+.ant-input-focused,
+.ant-select-focused .ant-select-selector {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
 }
 
 /* Ensure charts are visible in dark mode */
@@ -111,7 +161,304 @@ code {
   fill: currentColor;
 }
 
-/* Upload dragger fix */
+/* Upload dragger improvements */
 .ant-upload-drag {
   border-radius: 8px;
+  transition: border-color 0.2s ease;
+}
+
+.ant-upload-drag:hover {
+  border-color: #3b82f6;
+}
+
+/* Popconfirm styling */
+.ant-popconfirm .ant-popover-inner {
+  border-radius: 8px;
+}
+
+/* Message/notification styling */
+.ant-message-notice-content {
+  border-radius: 8px;
+}
+
+/* Select dropdown */
+.ant-select-dropdown {
+  border-radius: 8px;
+}
+
+/* Date picker dropdown */
+.ant-picker-dropdown {
+  border-radius: 8px;
+}
+
+/* ===== THEME GRADIENT BACKGROUNDS ===== */
+
+/* Default - No gradient */
+.theme-default {
+  /* Uses the default Ant Design background */
+}
+
+/* Ocean Blue */
+.theme-ocean {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+}
+
+.theme-ocean .ant-layout-sider {
+  background: rgba(22, 33, 62, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+.theme-ocean .ant-layout > .ant-layout {
+  background: transparent !important;
+}
+
+.theme-ocean .ant-card {
+  background: rgba(22, 33, 62, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Sunset */
+.theme-sunset {
+  background: linear-gradient(135deg, #1a1423 0%, #2d1f3d 50%, #4a2c4a 100%) !important;
+}
+
+.theme-sunset .ant-layout-sider {
+  background: rgba(45, 31, 61, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+.theme-sunset .ant-layout > .ant-layout {
+  background: transparent !important;
+}
+
+.theme-sunset .ant-card {
+  background: rgba(45, 31, 61, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Forest */
+.theme-forest {
+  background: linear-gradient(135deg, #0d1b0f 0%, #1a2f1c 50%, #1e3a20 100%) !important;
+}
+
+.theme-forest .ant-layout-sider {
+  background: rgba(26, 47, 28, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+.theme-forest .ant-layout > .ant-layout {
+  background: transparent !important;
+}
+
+.theme-forest .ant-card {
+  background: rgba(26, 47, 28, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Midnight */
+.theme-midnight {
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #252542 100%) !important;
+}
+
+.theme-midnight .ant-layout-sider {
+  background: rgba(26, 26, 46, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+.theme-midnight .ant-layout > .ant-layout {
+  background: transparent !important;
+}
+
+.theme-midnight .ant-card {
+  background: rgba(26, 26, 46, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Aurora */
+.theme-aurora {
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 30%, #1a2332 60%, #0d1117 100%) !important;
+}
+
+.theme-aurora .ant-layout-sider {
+  background: rgba(22, 27, 34, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+.theme-aurora .ant-layout > .ant-layout {
+  background: transparent !important;
+}
+
+.theme-aurora .ant-card {
+  background: rgba(22, 27, 34, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Ember */
+.theme-ember {
+  background: linear-gradient(135deg, #1a0a0a 0%, #2d1414 50%, #3d1a1a 100%) !important;
+}
+
+.theme-ember .ant-layout-sider {
+  background: rgba(45, 20, 20, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+.theme-ember .ant-layout > .ant-layout {
+  background: transparent !important;
+}
+
+.theme-ember .ant-card {
+  background: rgba(45, 20, 20, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Royal */
+.theme-royal {
+  background: linear-gradient(135deg, #1a0d2e 0%, #2d1b4e 50%, #3d2666 100%) !important;
+}
+
+.theme-royal .ant-layout-sider {
+  background: rgba(45, 27, 78, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+.theme-royal .ant-layout > .ant-layout {
+  background: transparent !important;
+}
+
+.theme-royal .ant-card {
+  background: rgba(45, 27, 78, 0.6) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Slate (Light theme with gradient) */
+.theme-slate {
+  background: linear-gradient(135deg, #e8eef5 0%, #dfe6ef 50%, #d5dce8 100%) !important;
+}
+
+.theme-slate .ant-layout-sider {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+.theme-slate .ant-layout > .ant-layout {
+  background: transparent !important;
+}
+
+.theme-slate .ant-card {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Theme transition */
+.ant-layout {
+  transition: background 0.3s ease;
+}
+
+.ant-layout-sider {
+  transition: background 0.3s ease;
+}
+
+.ant-card {
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+/* Theme picker button */
+.theme-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+  color: inherit;
+}
+
+.theme-picker-btn:hover {
+  border-color: var(--ant-color-primary);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* Theme option swatches */
+.theme-swatch {
+  width: 100%;
+  height: 48px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-swatch:hover {
+  transform: scale(1.02);
+}
+
+.theme-swatch.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.theme-swatch-default {
+  background: linear-gradient(135deg, #141414 0%, #1f1f1f 100%);
+}
+
+.theme-swatch-ocean {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+
+.theme-swatch-sunset {
+  background: linear-gradient(135deg, #1a1423 0%, #2d1f3d 50%, #4a2c4a 100%);
+}
+
+.theme-swatch-forest {
+  background: linear-gradient(135deg, #0d1b0f 0%, #1a2f1c 50%, #1e3a20 100%);
+}
+
+.theme-swatch-midnight {
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #252542 100%);
+}
+
+.theme-swatch-aurora {
+  background: linear-gradient(135deg, #0d1117 0%, #161b22 30%, #1a2332 60%, #0d1117 100%);
+}
+
+.theme-swatch-ember {
+  background: linear-gradient(135deg, #1a0a0a 0%, #2d1414 50%, #3d1a1a 100%);
+}
+
+.theme-swatch-royal {
+  background: linear-gradient(135deg, #1a0d2e 0%, #2d1b4e 50%, #3d2666 100%);
+}
+
+.theme-swatch-slate {
+  background: linear-gradient(135deg, #e8eef5 0%, #dfe6ef 50%, #d5dce8 100%);
+}
+
+.theme-swatch-label {
+  position: absolute;
+  bottom: 6px;
+  left: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.theme-swatch-slate .theme-swatch-label {
+  color: #333;
+  text-shadow: none;
 }
