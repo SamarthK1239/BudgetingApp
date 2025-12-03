@@ -11,7 +11,7 @@ import {
   BgColorsOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useTheme, THEME_OPTIONS, ThemeVariant } from '../../App';
+import { useTheme, THEME_OPTIONS } from '../../App';
 
 const { Content, Sider } = Layout;
 const { Text } = Typography;
