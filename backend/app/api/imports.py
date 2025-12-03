@@ -673,6 +673,51 @@ def parse_csv_file(content: str, date_format: str = "%m/%d/%Y") -> List[Imported
     return transactions
 
 
+def preprocess_ofx_content(content: bytes) -> bytes:
+    """
+    Preprocess OFX/QFX content to fix common formatting issues.
+    
+    Some banks (like Wells Fargo) output OFX files with:
+    - All headers on a single line without newlines
+    - No separation between header section and XML body
+    
+    This function normalizes the content so ofxparse can handle it.
+    """
+    try:
+        text = content.decode('utf-8')
+    except UnicodeDecodeError:
+        try:
+            text = content.decode('latin-1')
+        except:
+            text = content.decode('utf-8', errors='ignore')
+    
+    # Check if headers are on a single line (common Wells Fargo format)
+    # OFX headers end before the <OFX> tag
+    if '<OFX>' in text and 'OFXHEADER:' in text:
+        # Find where headers end and XML begins
+        ofx_start = text.find('<OFX>')
+        header_part = text[:ofx_start]
+        xml_part = text[ofx_start:]
+        
+        # If headers don't have newlines, add them
+        if '\n' not in header_part.strip():
+            # Known OFX header fields
+            header_fields = [
+                'OFXHEADER:', 'DATA:', 'VERSION:', 'SECURITY:', 'ENCODING:',
+                'CHARSET:', 'COMPRESSION:', 'OLDFILEUID:', 'NEWFILEUID:'
+            ]
+            
+            # Insert newlines before each header field
+            for field in header_fields:
+                if field in header_part and not header_part.startswith(field):
+                    header_part = header_part.replace(field, '\n' + field)
+            
+            # Reconstruct the content
+            text = header_part.strip() + '\n\n' + xml_part
+    
+    return text.encode('utf-8')
+
+
 def parse_ofx_file(content: bytes) -> List[ImportedTransaction]:
     """Parse OFX/QFX file content into transactions."""
     try:
@@ -681,6 +726,9 @@ def parse_ofx_file(content: bytes) -> List[ImportedTransaction]:
         raise HTTPException(status_code=500, detail="OFX parsing library not available")
     
     transactions = []
+    
+    # Preprocess content to fix formatting issues
+    content = preprocess_ofx_content(content)
     
     try:
         ofx = OfxParser.parse(io.BytesIO(content))
