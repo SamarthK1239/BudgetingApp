@@ -28,9 +28,31 @@ def get_budgets(
         query = query.filter(Budget.is_active == (1 if is_active else 0))
     
     if category_id:
-        query = query.filter(Budget.category_id == category_id)
+        # Filter budgets that include this category
+        query = query.join(Budget.categories).filter(Category.id == category_id)
     
-    return query.order_by(Budget.name).all()
+    budgets = query.order_by(Budget.name).all()
+    
+    # Convert to response format with category_ids
+    result = []
+    for budget in budgets:
+        budget_dict = {
+            "id": budget.id,
+            "name": budget.name,
+            "category_ids": [cat.id for cat in budget.categories],
+            "amount": budget.amount,
+            "period_type": budget.period_type,
+            "start_date": budget.start_date,
+            "end_date": budget.end_date,
+            "allow_rollover": bool(budget.allow_rollover),
+            "rollover_amount": budget.rollover_amount,
+            "is_active": bool(budget.is_active),
+            "created_at": budget.created_at,
+            "updated_at": budget.updated_at,
+        }
+        result.append(BudgetResponse(**budget_dict))
+    
+    return result
 
 
 @router.get("/progress", response_model=List[BudgetWithProgress])
@@ -49,10 +71,13 @@ def get_budgets_with_progress(
         # Get period boundaries
         period_start, period_end = budget.get_period_boundaries(reference_date)
         
-        # Calculate spent amount
+        # Get all category IDs for this budget
+        category_ids = [cat.id for cat in budget.categories]
+        
+        # Calculate spent amount across all linked categories
         spent = db.query(func.sum(Transaction.amount)).filter(
             and_(
-                Transaction.category_id == budget.category_id,
+                Transaction.category_id.in_(category_ids),
                 Transaction.transaction_type == TransactionType.EXPENSE,
                 Transaction.transaction_date >= period_start,
                 Transaction.transaction_date <= period_end
@@ -64,15 +89,26 @@ def get_budgets_with_progress(
         remaining = total_budget - spent
         percentage = (spent / total_budget * 100) if total_budget > 0 else 0
         
-        budget_progress = BudgetWithProgress(
-            **budget.__dict__,
-            spent=spent,
-            remaining=remaining,
-            percentage=round(percentage, 2),
-            period_start=period_start,
-            period_end=period_end
-        )
-        result.append(budget_progress)
+        budget_dict = {
+            "id": budget.id,
+            "name": budget.name,
+            "category_ids": category_ids,
+            "amount": budget.amount,
+            "period_type": budget.period_type,
+            "start_date": budget.start_date,
+            "end_date": budget.end_date,
+            "allow_rollover": bool(budget.allow_rollover),
+            "rollover_amount": budget.rollover_amount,
+            "is_active": bool(budget.is_active),
+            "created_at": budget.created_at,
+            "updated_at": budget.updated_at,
+            "spent": spent,
+            "remaining": remaining,
+            "percentage": round(percentage, 2),
+            "period_start": period_start,
+            "period_end": period_end,
+        }
+        result.append(BudgetWithProgress(**budget_dict))
     
     return result
 
@@ -85,36 +121,36 @@ def get_budget(budget_id: int, db: Session = Depends(get_db)):
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
     
-    return budget
+    budget_dict = {
+        "id": budget.id,
+        "name": budget.name,
+        "category_ids": [cat.id for cat in budget.categories],
+        "amount": budget.amount,
+        "period_type": budget.period_type,
+        "start_date": budget.start_date,
+        "end_date": budget.end_date,
+        "allow_rollover": bool(budget.allow_rollover),
+        "rollover_amount": budget.rollover_amount,
+        "is_active": bool(budget.is_active),
+        "created_at": budget.created_at,
+        "updated_at": budget.updated_at,
+    }
+    
+    return BudgetResponse(**budget_dict)
 
 
 @router.post("", response_model=BudgetResponse, status_code=201)
 def create_budget(budget: BudgetCreate, db: Session = Depends(get_db)):
     """Create new budget"""
     
-    # Validate category exists
-    category = db.query(Category).filter(Category.id == budget.category_id).first()
-    if not category:
-        raise HTTPException(status_code=404, detail="Category not found")
+    # Validate all categories exist
+    categories = db.query(Category).filter(Category.id.in_(budget.category_ids)).all()
+    if len(categories) != len(budget.category_ids):
+        raise HTTPException(status_code=404, detail="One or more categories not found")
     
-    # Check for existing active budget for this category
-    existing = db.query(Budget).filter(
-        and_(
-            Budget.category_id == budget.category_id,
-            Budget.is_active == 1,
-            Budget.end_date == None
-        )
-    ).first()
-    
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="Active budget already exists for this category"
-        )
-    
+    # Create budget
     db_budget = Budget(
         name=budget.name,
-        category_id=budget.category_id,
         amount=budget.amount,
         period_type=budget.period_type,
         start_date=budget.start_date,
@@ -123,11 +159,29 @@ def create_budget(budget: BudgetCreate, db: Session = Depends(get_db)):
         is_active=1
     )
     
+    # Link categories
+    db_budget.categories = categories
+    
     db.add(db_budget)
     db.commit()
     db.refresh(db_budget)
     
-    return db_budget
+    budget_dict = {
+        "id": db_budget.id,
+        "name": db_budget.name,
+        "category_ids": [cat.id for cat in db_budget.categories],
+        "amount": db_budget.amount,
+        "period_type": db_budget.period_type,
+        "start_date": db_budget.start_date,
+        "end_date": db_budget.end_date,
+        "allow_rollover": bool(db_budget.allow_rollover),
+        "rollover_amount": db_budget.rollover_amount,
+        "is_active": bool(db_budget.is_active),
+        "created_at": db_budget.created_at,
+        "updated_at": db_budget.updated_at,
+    }
+    
+    return BudgetResponse(**budget_dict)
 
 
 @router.put("/{budget_id}", response_model=BudgetResponse)
@@ -144,6 +198,15 @@ def update_budget(
     
     # Update fields
     update_data = budget.dict(exclude_unset=True)
+    
+    # Handle category_ids separately
+    if "category_ids" in update_data:
+        category_ids = update_data.pop("category_ids")
+        categories = db.query(Category).filter(Category.id.in_(category_ids)).all()
+        if len(categories) != len(category_ids):
+            raise HTTPException(status_code=404, detail="One or more categories not found")
+        db_budget.categories = categories
+    
     for field, value in update_data.items():
         if field in ["allow_rollover", "is_active"] and isinstance(value, bool):
             setattr(db_budget, field, 1 if value else 0)
@@ -153,7 +216,22 @@ def update_budget(
     db.commit()
     db.refresh(db_budget)
     
-    return db_budget
+    budget_dict = {
+        "id": db_budget.id,
+        "name": db_budget.name,
+        "category_ids": [cat.id for cat in db_budget.categories],
+        "amount": db_budget.amount,
+        "period_type": db_budget.period_type,
+        "start_date": db_budget.start_date,
+        "end_date": db_budget.end_date,
+        "allow_rollover": bool(db_budget.allow_rollover),
+        "rollover_amount": db_budget.rollover_amount,
+        "is_active": bool(db_budget.is_active),
+        "created_at": db_budget.created_at,
+        "updated_at": db_budget.updated_at,
+    }
+    
+    return BudgetResponse(**budget_dict)
 
 
 @router.delete("/{budget_id}")

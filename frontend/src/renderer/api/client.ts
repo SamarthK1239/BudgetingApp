@@ -243,6 +243,74 @@ class ApiClient {
     return this.client!.delete(`/api/budgets/${id}`);
   }
 
+  // Goal endpoints
+  async getGoals(params: any = {}): Promise<any> {
+    return this.client!.get('/api/goals', { params });
+  }
+
+  async getGoalsWithProgress(params: any = {}): Promise<any> {
+    return this.client!.get('/api/goals/progress', { params });
+  }
+
+  async getGoalsSummary(): Promise<any> {
+    return this.client!.get('/api/goals/summary');
+  }
+
+  async getGoal(id: number | string): Promise<any> {
+    return this.client!.get(`/api/goals/${id}`);
+  }
+
+  async createGoal(data: any): Promise<any> {
+    return this.client!.post('/api/goals', data);
+  }
+
+  async updateGoal(id: number | string, data: any): Promise<any> {
+    return this.client!.put(`/api/goals/${id}`, data);
+  }
+
+  async contributeToGoal(id: number | string, amount: number): Promise<any> {
+    return this.client!.patch(`/api/goals/${id}/contribute`, null, {
+      params: { amount }
+    });
+  }
+
+  async deleteGoal(id: number | string): Promise<any> {
+    return this.client!.delete(`/api/goals/${id}`);
+  }
+
+  // Income Schedule endpoints
+  async getIncomeSchedules(params: any = {}): Promise<any> {
+    return this.client!.get('/api/income-schedules', { params });
+  }
+
+  async getUpcomingIncome(days: number = 30): Promise<any> {
+    return this.client!.get('/api/income-schedules/upcoming', { params: { days } });
+  }
+
+  async getIncomeSummary(period: string = 'month'): Promise<any> {
+    return this.client!.get('/api/income-schedules/summary', { params: { period } });
+  }
+
+  async getIncomeSchedule(id: number | string): Promise<any> {
+    return this.client!.get(`/api/income-schedules/${id}`);
+  }
+
+  async createIncomeSchedule(data: any): Promise<any> {
+    return this.client!.post('/api/income-schedules', data);
+  }
+
+  async updateIncomeSchedule(id: number | string, data: any): Promise<any> {
+    return this.client!.put(`/api/income-schedules/${id}`, data);
+  }
+
+  async advanceIncomeSchedule(id: number | string): Promise<any> {
+    return this.client!.patch(`/api/income-schedules/${id}/advance`);
+  }
+
+  async deleteIncomeSchedule(id: number | string): Promise<any> {
+    return this.client!.delete(`/api/income-schedules/${id}`);
+  }
+
   // Reports endpoints
   async getSpendingByCategory(params: any): Promise<any> {
     return this.client!.get('/api/reports/spending-by-category', { params });

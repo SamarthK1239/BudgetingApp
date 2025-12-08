@@ -9,6 +9,10 @@ from app.schemas.category_keyword import (
 )
 from app.schemas.transaction import TransactionCreate, TransactionUpdate, TransactionResponse
 from app.schemas.budget import BudgetCreate, BudgetUpdate, BudgetResponse, BudgetWithProgress
+from app.schemas.goal import GoalCreate, GoalUpdate, GoalResponse, GoalWithProgress
+from app.schemas.income_schedule import (
+    IncomeScheduleCreate, IncomeScheduleUpdate, IncomeScheduleResponse, UpcomingIncome
+)
 from app.schemas.setup import AppSetup, SetupStatusResponse, InitialAccountSetup
 
 __all__ = [
@@ -34,6 +38,14 @@ __all__ = [
     "BudgetUpdate",
     "BudgetResponse",
     "BudgetWithProgress",
+    "GoalCreate",
+    "GoalUpdate",
+    "GoalResponse",
+    "GoalWithProgress",
+    "IncomeScheduleCreate",
+    "IncomeScheduleUpdate",
+    "IncomeScheduleResponse",
+    "UpcomingIncome",
     "AppSetup",
     "SetupStatusResponse",
     "InitialAccountSetup",

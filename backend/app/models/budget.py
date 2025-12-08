@@ -1,6 +1,6 @@
 """Budget model"""
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Enum, ForeignKey, Date
+from sqlalchemy import Column, Integer, String, Float, DateTime, Enum, ForeignKey, Date, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -18,13 +18,21 @@ class BudgetPeriod(str, enum.Enum):
     ANNUAL = "annual"
 
 
+# Association table for many-to-many relationship between budgets and categories
+budget_categories = Table(
+    'budget_categories',
+    Base.metadata,
+    Column('budget_id', Integer, ForeignKey('budgets.id', ondelete='CASCADE'), primary_key=True),
+    Column('category_id', Integer, ForeignKey('categories.id', ondelete='CASCADE'), primary_key=True)
+)
+
+
 class Budget(Base):
     """Budget model for spending/income budgets"""
     __tablename__ = "budgets"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
     
     # Budget amount and period
     amount = Column(Float, nullable=False)
@@ -45,8 +53,8 @@ class Budget(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
     
-    # Relationships
-    category = relationship("Category", back_populates="budgets")
+    # Relationships - many-to-many with categories
+    categories = relationship("Category", secondary=budget_categories, backref="budgets")
 
     def get_period_boundaries(self, reference_date: date = None):
         """Calculate period start and end dates for a given reference date"""
