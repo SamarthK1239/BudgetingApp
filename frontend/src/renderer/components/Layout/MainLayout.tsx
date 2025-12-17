@@ -6,6 +6,8 @@ import {
   TransactionOutlined,
   PieChartOutlined,
   TagsOutlined,
+  TrophyOutlined,
+  CalendarOutlined,
   BarChartOutlined,
   DollarCircleOutlined,
   BgColorsOutlined,
@@ -33,6 +35,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     { key: '/transactions', icon: <TransactionOutlined />, label: 'Transactions' },
     { key: '/budgets', icon: <PieChartOutlined />, label: 'Budgets' },
     { key: '/categories', icon: <TagsOutlined />, label: 'Categories' },
+    { key: '/goals', icon: <TrophyOutlined />, label: 'Goals' },
+    { key: '/income', icon: <CalendarOutlined />, label: 'Income' },
     { key: '/reports', icon: <BarChartOutlined />, label: 'Reports' },
   ];
 

@@ -11,6 +11,8 @@ import Accounts from './pages/Accounts';
 import Transactions from './pages/Transactions';
 import Budgets from './pages/Budgets';
 import Categories from './pages/Categories';
+import Goals from './pages/Goals';
+import Income from './pages/Income';
 import Reports from './pages/Reports';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
@@ -212,6 +214,8 @@ function App() {
                   <Route path="/transactions" element={<Transactions />} />
                   <Route path="/budgets" element={<Budgets />} />
                   <Route path="/categories" element={<Categories />} />
+                  <Route path="/goals" element={<Goals />} />
+                  <Route path="/income" element={<Income />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

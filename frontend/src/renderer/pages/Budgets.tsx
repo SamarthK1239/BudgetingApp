@@ -34,7 +34,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import apiClient from '../api/client';
-import { BudgetWithProgress, BudgetPeriod, Category } from '../../shared/types';
+import { BudgetWithProgress, BudgetPeriod, Category, IncomeSummary } from '../../shared/types';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -81,6 +81,12 @@ const Budgets: React.FC = () => {
   const { data: categories = [] } = useQuery({
     queryKey: ['categories'],
     queryFn: () => apiClient.getCategories(),
+  });
+
+  // Fetch income summary
+  const { data: incomeSummary } = useQuery<IncomeSummary>({
+    queryKey: ['income-summary'],
+    queryFn: () => apiClient.getIncomeSummary('month'),
   });
 
   // Create budget mutation
@@ -136,6 +142,7 @@ const Budgets: React.FC = () => {
         start_date: dayjs().startOf('month'),
         period_type: BudgetPeriod.MONTHLY,
         allow_rollover: false,
+        category_ids: [],
       });
     }
     setIsModalOpen(true);
@@ -180,13 +187,25 @@ const Budgets: React.FC = () => {
     return category?.name || 'Unknown';
   };
 
+  // Get category names for multiple IDs
+  const getCategoryNames = (categoryIds: number[]) => {
+    return categoryIds.map(id => getCategoryName(id)).join(', ');
+  };
+
   // Get expense categories only (for budgets)
   const expenseCategories = categories.filter((c: Category) => c.category_type === 'expense');
 
   // Calculate summary stats
   const totalBudgeted = budgets.reduce((sum: number, b: BudgetWithProgress) => sum + b.amount, 0);
   const totalSpent = budgets.reduce((sum: number, b: BudgetWithProgress) => sum + b.spent, 0);
-  const overBudgetCount = budgets.filter((b: BudgetWithProgress) => b.percentage >= 100).length;
+  
+  // Calculate monthly budgets only for income comparison
+  const monthlyBudgeted = budgets
+    .filter((b: BudgetWithProgress) => b.period_type === BudgetPeriod.MONTHLY)
+    .reduce((sum: number, b: BudgetWithProgress) => sum + b.amount, 0);
+  
+  const expectedIncome = incomeSummary?.total_expected_income || 0;
+  const budgetCoverage = expectedIncome > 0 ? (monthlyBudgeted / expectedIncome) * 100 : 0;
 
   return (
     <div>
@@ -199,7 +218,7 @@ const Budgets: React.FC = () => {
 
       {/* Summary Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
               title="Total Budgeted"
@@ -210,7 +229,7 @@ const Budgets: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
               title="Total Spent"
@@ -221,15 +240,31 @@ const Budgets: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="Over Budget"
-              value={overBudgetCount}
-              suffix={overBudgetCount === 1 ? 'Budget' : 'Budgets'}
-              prefix={<WarningOutlined />}
-              valueStyle={{ color: overBudgetCount > 0 ? '#ff4d4f' : '#52c41a' }}
+              title="Expected Income"
+              value={expectedIncome}
+              precision={2}
+              prefix={<CalendarOutlined />}
+              valueStyle={{ color: '#52c41a' }}
             />
+            <Text type="secondary" style={{ fontSize: 12 }}>This month</Text>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Budget Coverage"
+              value={budgetCoverage}
+              precision={0}
+              suffix="%"
+              prefix={<WarningOutlined />}
+              valueStyle={{ color: budgetCoverage > 100 ? '#ff4d4f' : budgetCoverage > 80 ? '#faad14' : '#52c41a' }}
+            />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {budgetCoverage > 100 ? 'Over-budgeted!' : budgetCoverage > 80 ? 'High allocation' : 'Healthy'}
+            </Text>
           </Card>
         </Col>
       </Row>
@@ -279,7 +314,9 @@ const Budgets: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                   <div>
                     <Title level={4} style={{ margin: 0, marginBottom: 4 }}>{budget.name}</Title>
-                    <Text type="secondary" style={{ fontSize: 13 }}>{getCategoryName(budget.category_id)}</Text>
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                      {getCategoryNames(budget.category_ids)}
+                    </Text>
                   </div>
                   <Tag color={budgetPeriodColors[budget.period_type]} style={{ margin: 0 }}>
                     {budgetPeriodLabels[budget.period_type]}
@@ -369,11 +406,17 @@ const Budgets: React.FC = () => {
           </Form.Item>
 
           <Form.Item
-            name="category_id"
-            label="Category"
-            rules={[{ required: true, message: 'Please select a category' }]}
+            name="category_ids"
+            label="Categories"
+            rules={[{ required: true, message: 'Please select at least one category' }]}
           >
-            <Select placeholder="Select category" showSearch optionFilterProp="children">
+            <Select 
+              mode="multiple"
+              placeholder="Select one or more categories" 
+              showSearch 
+              optionFilterProp="children"
+              maxTagCount="responsive"
+            >
               {expenseCategories.map((cat: Category) => (
                 <React.Fragment key={cat.id}>
                   <Option value={cat.id} disabled={!!cat.subcategories?.length}>

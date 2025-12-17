@@ -210,7 +210,9 @@ const Dashboard: React.FC = () => {
               valueStyle={{ color: (incomeExpenseData?.net || 0) >= 0 ? '#52c41a' : '#cf1322' }}
               suffix={
                 <Text type="secondary" style={{ fontSize: 14 }}>
-                  ({incomeExpenseData?.savings_rate?.toFixed(0) || 0}%)
+                  ({((incomeExpenseData?.savings_rate || 0) >= -200 && (incomeExpenseData?.savings_rate || 0) <= 100) 
+                    ? `${incomeExpenseData?.savings_rate?.toFixed(0)}%`
+                    : incomeExpenseData?.savings_rate && incomeExpenseData.savings_rate < -200 ? '>200%' : '0%'})
                 </Text>
               }
             />

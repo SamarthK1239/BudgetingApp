@@ -98,13 +98,24 @@ def get_income_vs_expenses(
         )
     ).scalar() or 0.0
     
+    net = income - expenses
+    
+    # Calculate savings rate with proper bounds
+    if income > 0:
+        savings_rate = (net / income) * 100
+        # Cap at reasonable values (-200% to 100%)
+        savings_rate = max(-200, min(100, savings_rate))
+    else:
+        # No income: if there are expenses, it's -100%, otherwise 0%
+        savings_rate = -100 if expenses > 0 else 0
+    
     return {
         "start_date": start_date,
         "end_date": end_date,
         "income": income,
         "expenses": expenses,
-        "net": income - expenses,
-        "savings_rate": round((income - expenses) / income * 100 if income > 0 else 0, 2)
+        "net": net,
+        "savings_rate": round(savings_rate, 2)
     }
 
 

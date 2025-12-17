@@ -40,7 +40,6 @@ class Category(Base):
     # Relationships
     parent = relationship("Category", remote_side=[id], backref="subcategories")
     transactions = relationship("Transaction", back_populates="category")
-    budgets = relationship("Budget", back_populates="category")
 
     def __repr__(self):
         return f"<Category(id={self.id}, name='{self.name}', type='{self.category_type}', parent_id={self.parent_id})>"

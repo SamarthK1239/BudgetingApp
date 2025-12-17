@@ -36,6 +36,14 @@ jobs:
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
 
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref }}" -replace 'refs/tags/v', ''
+          cd frontend
+          npm version $VERSION --no-git-tag-version --allow-same-version
+
       - name: Install backend dependencies
         run: |
           cd backend
@@ -88,6 +96,13 @@ jobs:
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
 
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          cd frontend
+          npm version $VERSION --no-git-tag-version --allow-same-version
+
       - name: Install backend dependencies
         run: |
           cd backend
@@ -139,6 +154,13 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          cd frontend
+          npm version $VERSION --no-git-tag-version --allow-same-version
 
       - name: Install backend dependencies
         run: |

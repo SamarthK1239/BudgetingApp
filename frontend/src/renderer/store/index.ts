@@ -8,6 +8,8 @@ import accountsReducer from './slices/accountsSlice';
 import categoriesReducer from './slices/categoriesSlice';
 import transactionsReducer from './slices/transactionsSlice';
 import budgetsReducer from './slices/budgetsSlice';
+import goalsReducer from './slices/goalsSlice';
+import incomeSchedulesReducer from './slices/incomeSchedulesSlice';
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +18,8 @@ export const store = configureStore({
     categories: categoriesReducer,
     transactions: transactionsReducer,
     budgets: budgetsReducer,
+    goals: goalsReducer,
+    incomeSchedules: incomeSchedulesReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

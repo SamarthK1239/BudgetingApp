@@ -138,7 +138,7 @@ export enum BudgetPeriod {
 export interface Budget {
   id: number;
   name: string;
-  category_id: number;
+  category_ids: number[];
   amount: number;
   period_type: BudgetPeriod;
   start_date: string;
@@ -182,6 +182,96 @@ export interface AppSetup {
   allow_budget_rollover: boolean;
   use_preset_categories: boolean;
   enable_multi_currency: boolean;
+}
+
+// Income Schedule types
+export enum IncomeFrequency {
+  WEEKLY = 'weekly',
+  BIWEEKLY = 'biweekly',
+  SEMIMONTHLY = 'semimonthly',
+  MONTHLY = 'monthly',
+  QUARTERLY = 'quarterly',
+  ANNUAL = 'annual',
+}
+
+export interface IncomeSchedule {
+  id: number;
+  name: string;
+  description?: string;
+  amount: number;
+  frequency: IncomeFrequency;
+  account_id?: number;
+  category_id?: number;
+  start_date: string;
+  end_date?: string;
+  next_expected_date: string;
+  semimonthly_day1?: number;
+  semimonthly_day2?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface UpcomingIncome {
+  schedule_id: number;
+  schedule_name: string;
+  amount: number;
+  expected_date: string;
+  days_until: number;
+  account_name?: string;
+  category_name?: string;
+}
+
+export interface IncomeSummary {
+  period: string;
+  start_date: string;
+  end_date: string;
+  total_expected_income: number;
+  expected_payment_count: number;
+  active_schedules: number;
+}
+
+// Goal types
+export enum GoalStatus {
+  NOT_STARTED = 'not_started',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  PAUSED = 'paused',
+  CANCELLED = 'cancelled',
+}
+
+export interface Goal {
+  id: number;
+  name: string;
+  description?: string;
+  target_amount: number;
+  current_amount: number;
+  account_id?: number;
+  start_date: string;
+  target_date: string;
+  completed_date?: string;
+  status: GoalStatus;
+  priority: number;
+  color?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface GoalWithProgress extends Goal {
+  progress_percentage: number;
+  remaining_amount: number;
+  days_remaining: number;
+  days_elapsed: number;
+}
+
+export interface GoalSummary {
+  total_goals: number;
+  active_goals: number;
+  completed_goals: number;
+  total_target_amount: number;
+  total_saved_amount: number;
+  total_remaining_amount: number;
+  average_progress: number;
 }
 
 // Report types
