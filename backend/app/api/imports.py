@@ -811,19 +811,44 @@ def should_auto_flip_for_account(account: Account) -> bool:
 
 
 def check_duplicates(transactions: List[ImportedTransaction], account_id: int, db: Session) -> List[bool]:
-    """Check which transactions might be duplicates."""
+    """
+    Check which transactions might be duplicates.
+    
+    A duplicate is defined as having the same:
+    - Account ID
+    - Transaction date
+    - Amount
+    - Transaction type
+    - Payee/description (must match)
+    
+    This is based on the assumption that for a specific account,
+    date + payee/description + amount uniquely identifies a transaction.
+    """
     duplicates = []
     
     for trans in transactions:
-        # Check for exact match on date, amount, and similar description
-        existing = db.query(Transaction).filter(
+        # Get the description to check (prefer payee, fall back to description)
+        check_description = (trans.payee or trans.description or '').strip()
+        
+        # Get all transactions for this account with matching date, amount, and type
+        potential_dupes = db.query(Transaction).filter(
             Transaction.account_id == account_id,
             Transaction.transaction_date == trans.transaction_date,
             Transaction.amount == trans.amount,
             Transaction.transaction_type == trans.transaction_type
-        ).first()
+        ).all()
         
-        duplicates.append(existing is not None)
+        # Check if any have matching payee/description
+        is_duplicate = False
+        for existing in potential_dupes:
+            existing_description = (existing.payee or existing.description or '').strip()
+            
+            # Case-insensitive exact match on payee/description
+            if existing_description.lower() == check_description.lower():
+                is_duplicate = True
+                break
+        
+        duplicates.append(is_duplicate)
     
     return duplicates
 
@@ -1018,12 +1043,25 @@ async def execute_import(
         
         db.add(db_transaction)
         
-        # Update account balance
+        # Update account balance based on transaction type and account type
+        from app.models.account import AccountType
+        
+        # For credit card and loan accounts, the logic is inverted:
+        # - Expenses (charges/borrowing) INCREASE the balance (you owe more)
+        # - Income (payments) DECREASE the balance (you owe less)
+        is_debt_account = account.account_type in [AccountType.CREDIT_CARD, AccountType.LOAN]
+        
         if trans.transaction_type == TransactionType.INCOME:
-            account.current_balance += trans.amount
+            if is_debt_account:
+                account.current_balance -= trans.amount  # Payment reduces debt
+            else:
+                account.current_balance += trans.amount  # Income increases asset
             total_income += trans.amount
-        else:
-            account.current_balance -= trans.amount
+        else:  # EXPENSE
+            if is_debt_account:
+                account.current_balance += trans.amount  # Charge increases debt
+            else:
+                account.current_balance -= trans.amount  # Expense decreases asset
             total_expenses += trans.amount
         
         imported_count += 1

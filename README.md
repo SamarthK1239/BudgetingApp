@@ -33,7 +33,39 @@ A cross-platform desktop budgeting application built with **Electron + React + T
 - **SQLite**: Embedded database
 - **Pydantic**: Data validation
 
-### Frontend
+### Frontenduvicorn app.main:app --reload
+>> 
+INFO:     Will watch for changes in these directories: ['F:\\GitHub Repos\\Other Repos\\BudgetingApp\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [69456] using WatchFiles
+INFO:     Started server process [36440]
+INFO:     Waiting for application startup.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 001_add_category_keywords -> 002_add_goals, Add goals table
+Alembic migration skipped: (sqlite3.OperationalError) table goals already exists
+[SQL: 
+CREATE TABLE goals (
+        id INTEGER NOT NULL, 
+        name VARCHAR(200) NOT NULL, 
+        description TEXT, 
+        target_amount FLOAT NOT NULL, 
+        current_amount FLOAT DEFAULT '0.0' NOT NULL, 
+        account_id INTEGER, 
+        start_date DATE NOT NULL, 
+        target_date DATE NOT NULL,
+        completed_date DATE,
+        status VARCHAR(11) DEFAULT 'in_progress' NOT NULL,
+        priority INTEGER DEFAULT '1' NOT NULL,
+        color VARCHAR(20),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at DATETIME,
+        PRIMARY KEY (id),
+        FOREIGN KEY(account_id) REFERENCES accounts (id)
+)
+
+]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
 - **Electron**: Cross-platform desktop framework
 - **React 18**: UI library
 - **TypeScript**: Type-safe JavaScript

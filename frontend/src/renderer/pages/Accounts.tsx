@@ -189,16 +189,31 @@ const Accounts: React.FC = () => {
       dataIndex: 'current_balance',
       key: 'current_balance',
       align: 'right' as const,
-      render: (balance: number, record: Account) => (
-        <span
-          style={{
-            color: balance >= 0 ? '#52c41a' : '#ff4d4f',
-            fontWeight: 'bold',
-          }}
-        >
-          {record.currency} {balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </span>
-      ),
+      render: (balance: number, record: Account) => {
+        // For credit cards and loans, positive balance means debt (red)
+        // For other accounts, positive balance is good (green)
+        const isDebtAccount = ['credit_card', 'loan'].includes(record.account_type);
+        let color: string;
+        
+        if (isDebtAccount) {
+          // Debt accounts: positive balance (owing money) is red, zero/negative is green
+          color = balance > 0 ? '#ff4d4f' : '#52c41a';
+        } else {
+          // Asset accounts: positive balance is green, negative is red
+          color = balance >= 0 ? '#52c41a' : '#ff4d4f';
+        }
+        
+        return (
+          <span
+            style={{
+              color: color,
+              fontWeight: 'bold',
+            }}
+          >
+            {record.currency} {balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </span>
+        );
+      },
     },
     {
       title: 'Initial Balance',
