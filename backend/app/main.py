@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import logging
 
 from app.database import engine, Base
 from app.api import accounts, transactions, categories, budgets, reports, setup, imports, keywords, goals, income_schedules
@@ -10,12 +11,25 @@ from app.api import accounts, transactions, categories, budgets, reports, setup,
 # Import models to ensure they're registered with Base
 from app.models import account, transaction, category, budget, category_keyword, goal, income_schedule
 
+# Import database health checks
+from app.database_fixes import run_database_health_checks
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
+    logger.info("Starting BudgetingApp backend...")
+    
     # Startup: Create database tables
     Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created/verified")
     
     # Run auto-migrations (if Alembic is configured)
     try:
@@ -23,12 +37,27 @@ async def lifespan(app: FastAPI):
         from alembic import command
         alembic_cfg = Config("alembic.ini")
         command.upgrade(alembic_cfg, "head")
+        logger.info("Alembic migrations applied")
     except Exception as e:
-        print(f"Alembic migration skipped: {e}")
+        logger.warning(f"Alembic migration skipped: {e}")
+    
+    # Run database health checks and fixes
+    try:
+        logger.info("Running database health checks...")
+        results = run_database_health_checks()
+        if results["fixes_applied"] > 0:
+            logger.info(f"✓ Applied {results['fixes_applied']} database fix(es)")
+        if results["errors"]:
+            logger.error(f"Database health check errors: {results['errors']}")
+    except Exception as e:
+        logger.error(f"Error during database health checks: {e}")
+    
+    logger.info("Backend startup complete")
     
     yield
     
     # Shutdown: cleanup if needed
+    logger.info("Shutting down backend...")
     pass
 
 
