@@ -112,6 +112,18 @@ If the build fails with missing files, ensure:
 
 2. Check the Electron console for errors (the packaged app logs to the system console)
 
+## Database Schema Fixes
+
+The application includes automatic database health checks that run on startup. This ensures users upgrading from older versions have their database schemas automatically fixed.
+
+**What it does:**
+- Detects and fixes schema inconsistencies from incomplete migrations
+- Runs transparently on every app start
+- Safe and idempotent (can run multiple times without issues)
+- All operations are logged for debugging
+
+**For developers:** See `backend/DATABASE_FIXES.md` for details on adding new schema fixes.
+
 ## Development vs Production
 
 | Feature | Development | Production |
@@ -119,6 +131,7 @@ If the build fails with missing files, ensure:
 | Backend | Run manually with `uvicorn` | Bundled executable, auto-started |
 | Frontend | React dev server (hot reload) | Static build served by Electron |
 | Database | `./budget.db` in backend folder | User's app data directory |
+| Database Fixes | Run on backend startup | Run on backend startup (automatic) |
 | DevTools | Enabled | Disabled |
 
 ## Creating Icons
