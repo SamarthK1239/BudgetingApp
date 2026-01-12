@@ -6,8 +6,34 @@ Automatically detects and fixes database schema issues on startup
 import sqlite3
 from pathlib import Path
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+
+def get_database_path() -> str:
+    """Get the database file path (same logic as database.py)"""
+    db_path = os.getenv("DATABASE_PATH")
+    
+    if db_path:
+        return db_path
+    
+    # Default to app data directory for production
+    if os.getenv("ENVIRONMENT") == "production":
+        if os.name == "nt":  # Windows
+            app_data = os.getenv("APPDATA")
+            db_dir = Path(app_data) / "BudgetingApp"
+        elif os.name == "posix":
+            if os.uname().sysname == "Darwin":  # macOS
+                db_dir = Path.home() / "Library" / "Application Support" / "BudgetingApp"
+            else:  # Linux
+                db_dir = Path.home() / ".config" / "BudgetingApp"
+        
+        db_dir.mkdir(parents=True, exist_ok=True)
+        return str(db_dir / "budget.db")
+    
+    # Development: use local database
+    return "budget.db"
 
 
 def get_table_columns(cursor, table_name: str) -> list[str]:
@@ -16,7 +42,7 @@ def get_table_columns(cursor, table_name: str) -> list[str]:
     return [row[1] for row in cursor.fetchall()]
 
 
-def fix_budgets_table_schema(db_path: str = "budget.db") -> bool:
+def fix_budgets_table_schema(db_path: str = None) -> bool:
     """
     Fix budgets table schema by removing legacy category_id column.
     
@@ -26,6 +52,11 @@ def fix_budgets_table_schema(db_path: str = "budget.db") -> bool:
     Returns:
         bool: True if fix was applied, False if no fix was needed
     """
+    if db_path is None:
+        db_path = get_database_path()
+    
+    logger.info(f"Checking budgets table schema in: {db_path}")
+    
     if not Path(db_path).exists():
         logger.info("Database does not exist yet, skipping schema fixes")
         return False
@@ -57,6 +88,11 @@ def fix_budgets_table_schema(db_path: str = "budget.db") -> bool:
         
         # Start transaction
         cursor.execute("BEGIN TRANSACTION")
+        
+        # 0. Count existing budgets
+        cursor.execute("SELECT COUNT(*) FROM budgets")
+        existing_count = cursor.fetchone()[0]
+        logger.info(f"  → Found {existing_count} existing budget(s) to migrate")
         
         # 1. Create new budgets table without category_id
         cursor.execute("""
@@ -115,13 +151,18 @@ def fix_budgets_table_schema(db_path: str = "budget.db") -> bool:
         conn.close()
 
 
-def run_database_health_checks(db_path: str = "budget.db") -> dict:
+def run_database_health_checks(db_path: str = None) -> dict:
     """
     Run all database health checks and fixes.
     
     Returns:
         dict: Summary of fixes applied
     """
+    if db_path is None:
+        db_path = get_database_path()
+    
+    logger.info(f"Running database health checks on: {db_path}")
+    
     results = {
         "checks_run": 0,
         "fixes_applied": 0,
