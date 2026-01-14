@@ -243,6 +243,16 @@ class ApiClient {
     return this.client!.delete(`/api/budgets/${id}`);
   }
 
+  async processBudgetRollover(id: number | string, referenceDate?: string): Promise<any> {
+    const config = referenceDate ? { params: { reference_date: referenceDate } } : undefined;
+    return this.client!.post(`/api/budgets/${id}/process-rollover`, null, config);
+  }
+
+  async processAllBudgetRollovers(referenceDate?: string): Promise<any> {
+    const config = referenceDate ? { params: { reference_date: referenceDate } } : undefined;
+    return this.client!.post('/api/budgets/process-all-rollovers', null, config);
+  }
+
   // Goal endpoints
   async getGoals(params: any = {}): Promise<any> {
     return this.client!.get('/api/goals', { params });

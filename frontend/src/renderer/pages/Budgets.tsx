@@ -30,6 +30,7 @@ import {
   ShoppingCartOutlined,
   WarningOutlined,
   CalendarOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -128,6 +129,30 @@ const Budgets: React.FC = () => {
     },
   });
 
+  // Process rollover mutation (single budget)
+  const processRolloverMutation = useMutation({
+    mutationFn: (id: number) => apiClient.processBudgetRollover(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
+      message.success('Rollover processed successfully');
+    },
+    onError: (error: any) => {
+      message.error(error.message || 'Failed to process rollover');
+    },
+  });
+
+  // Process all rollovers mutation
+  const processAllRolloversMutation = useMutation({
+    mutationFn: () => apiClient.processAllBudgetRollovers(),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['budgets-progress'] });
+      message.success(`Processed ${data.processed} budget rollover(s)`);
+    },
+    onError: (error: any) => {
+      message.error(error.message || 'Failed to process rollovers');
+    },
+  });
+
   const handleOpenModal = (budget?: BudgetWithProgress) => {
     if (budget) {
       setEditingBudget(budget);
@@ -171,6 +196,14 @@ const Budgets: React.FC = () => {
     deleteMutation.mutate(id);
   };
 
+  const handleProcessRollover = (id: number) => {
+    processRolloverMutation.mutate(id);
+  };
+
+  const handleProcessAllRollovers = () => {
+    processAllRolloversMutation.mutate();
+  };
+
   // Get category name by ID
   const getCategoryName = (categoryId: number) => {
     const findCategory = (cats: Category[]): Category | undefined => {
@@ -211,9 +244,20 @@ const Budgets: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={2} style={{ margin: 0 }}>Budgets</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
-          Add Budget
-        </Button>
+        <Space>
+          <Tooltip title="Process rollovers for all budgets with rollover enabled">
+            <Button 
+              icon={<SyncOutlined />} 
+              onClick={handleProcessAllRollovers}
+              loading={processAllRolloversMutation.isPending}
+            >
+              Process All Rollovers
+            </Button>
+          </Tooltip>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
+            Add Budget
+          </Button>
+        </Space>
       </div>
 
       {/* Summary Cards */}
@@ -293,6 +337,16 @@ const Budgets: React.FC = () => {
                   actions: { borderTop: 'none', background: 'transparent' }
                 }}
                 actions={[
+                  ...(budget.allow_rollover ? [
+                    <Tooltip title={`Process rollover from previous ${budgetPeriodLabels[budget.period_type].toLowerCase()} period`} key="rollover">
+                      <Button 
+                        type="text" 
+                        icon={<SyncOutlined />} 
+                        onClick={() => handleProcessRollover(budget.id)}
+                        loading={processRolloverMutation.isPending}
+                      />
+                    </Tooltip>
+                  ] : []),
                   <Tooltip title="Edit" key="edit">
                     <Button type="text" icon={<EditOutlined />} onClick={() => handleOpenModal(budget)} />
                   </Tooltip>,
@@ -329,9 +383,18 @@ const Budgets: React.FC = () => {
                     <Text style={{ fontSize: 13, color: getProgressColor(budget.percentage), fontWeight: 600 }}>
                       ${budget.spent.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </Text>
-                    <Text style={{ fontSize: 13, fontWeight: 500 }}>
-                      ${budget.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                    </Text>
+                    <div style={{ textAlign: 'right' }}>
+                      <Text style={{ fontSize: 13, fontWeight: 500 }}>
+                        ${(budget.amount + budget.rollover_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </Text>
+                      {budget.rollover_amount !== 0 && (
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11 }}>
+                            (${budget.amount.toFixed(2)} + ${budget.rollover_amount.toFixed(2)})
+                          </Text>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <Progress
                     percent={Math.min(budget.percentage, 100)}
@@ -350,7 +413,9 @@ const Budgets: React.FC = () => {
                     }}>
                       {budget.percentage.toFixed(1)}%
                     </Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Budget</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {budget.rollover_amount !== 0 ? 'Total Available' : 'Budget'}
+                    </Text>
                   </div>
                 </div>
 

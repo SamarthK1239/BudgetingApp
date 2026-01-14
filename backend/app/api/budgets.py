@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 from typing import List, Optional
-from datetime import date
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
 
 from app.database import get_db
 from app.schemas.budget import BudgetCreate, BudgetUpdate, BudgetResponse, BudgetWithProgress
@@ -246,3 +247,214 @@ def delete_budget(budget_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Budget deleted"}
+
+
+@router.post("/process-all-rollovers")
+def process_all_rollovers(
+    reference_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Process rollovers for all active budgets that allow rollover.
+    
+    This can be called manually or scheduled to run at period boundaries.
+    """
+    if reference_date is None:
+        reference_date = date.today()
+    
+    budgets = db.query(Budget).filter(
+        and_(
+            Budget.is_active == 1,
+            Budget.allow_rollover == 1
+        )
+    ).all()
+    
+    results = {
+        "processed": 0,
+        "errors": [],
+        "budget_ids": []
+    }
+    
+    for budget in budgets:
+        try:
+            # Get current period boundaries
+            current_period_start, current_period_end = budget.get_period_boundaries(reference_date)
+            
+            # Get category IDs
+            category_ids = [cat.id for cat in budget.categories]
+            
+            # Skip if no categories linked
+            if not category_ids:
+                continue
+            
+            # Calculate accumulated unspent from ALL previous complete periods
+            total_rollover = 0.0
+            
+            # Start from the budget's start_date and iterate through all complete periods
+            period_date = budget.start_date
+            
+            while period_date < current_period_start:
+                period_start, period_end = budget.get_period_boundaries(period_date)
+                
+                # Calculate spent in this period
+                spent = db.query(func.sum(Transaction.amount)).filter(
+                    and_(
+                        Transaction.category_id.in_(category_ids),
+                        Transaction.transaction_type == TransactionType.EXPENSE,
+                        Transaction.transaction_date >= period_start,
+                        Transaction.transaction_date <= period_end
+                    )
+                ).scalar() or 0.0
+                
+                # Add unspent from this period to total rollover
+                unspent = max(0.0, budget.amount - spent)
+                total_rollover += unspent
+                
+                # Move to next period
+                if budget.period_type == BudgetPeriod.WEEKLY:
+                    period_date = period_start + timedelta(weeks=1)
+                elif budget.period_type == BudgetPeriod.MONTHLY:
+                    period_date = period_start + relativedelta(months=1)
+                elif budget.period_type == BudgetPeriod.QUARTERLY:
+                    period_date = period_start + relativedelta(months=3)
+                elif budget.period_type == BudgetPeriod.ANNUAL:
+                    period_date = period_start + relativedelta(years=1)
+            
+            # Update rollover with cumulative total
+            budget.rollover_amount = total_rollover
+            
+            results["processed"] += 1
+            results["budget_ids"].append(budget.id)
+            
+        except Exception as e:
+            results["errors"].append({
+                "budget_id": budget.id,
+                "budget_name": budget.name,
+                "error": str(e)
+            })
+    
+    db.commit()
+    
+    return results
+
+
+@router.post("/{budget_id}/process-rollover", response_model=BudgetResponse)
+def process_budget_rollover(
+    budget_id: int,
+    reference_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Process rollover for a budget period.
+    
+    Calculates unspent amount from the previous period and adds it to rollover_amount.
+    This should be called at the end of each budget period for budgets with allow_rollover=True.
+    """
+    db_budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    
+    if not db_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    
+    if not db_budget.allow_rollover:
+        raise HTTPException(status_code=400, detail="Budget does not allow rollover")
+    
+    if reference_date is None:
+        reference_date = date.today()
+    
+    # Get the current period boundaries
+    current_period_start, current_period_end = db_budget.get_period_boundaries(reference_date)
+    
+    # Get all category IDs for this budget
+    category_ids = [cat.id for cat in db_budget.categories]
+    
+    # If no categories, set rollover to the full budget amount per period (no spending tracked)
+    if not category_ids:
+        # Calculate how many complete periods have passed
+        if db_budget.period_type == BudgetPeriod.WEEKLY:
+            periods_elapsed = max(0, (current_period_start - db_budget.start_date).days // 7)
+        elif db_budget.period_type == BudgetPeriod.MONTHLY:
+            periods_elapsed = max(0, (current_period_start.year - db_budget.start_date.year) * 12 + 
+                                   (current_period_start.month - db_budget.start_date.month))
+        elif db_budget.period_type == BudgetPeriod.QUARTERLY:
+            months = (current_period_start.year - db_budget.start_date.year) * 12 + \
+                    (current_period_start.month - db_budget.start_date.month)
+            periods_elapsed = max(0, months // 3)
+        elif db_budget.period_type == BudgetPeriod.ANNUAL:
+            periods_elapsed = max(0, current_period_start.year - db_budget.start_date.year)
+        
+        db_budget.rollover_amount = db_budget.amount * periods_elapsed
+        db.commit()
+        db.refresh(db_budget)
+        
+        budget_dict = {
+            "id": db_budget.id,
+            "name": db_budget.name,
+            "category_ids": [],
+            "amount": db_budget.amount,
+            "period_type": db_budget.period_type,
+            "start_date": db_budget.start_date,
+            "end_date": db_budget.end_date,
+            "allow_rollover": bool(db_budget.allow_rollover),
+            "rollover_amount": db_budget.rollover_amount,
+            "is_active": bool(db_budget.is_active),
+            "created_at": db_budget.created_at,
+            "updated_at": db_budget.updated_at,
+        }
+        
+        return BudgetResponse(**budget_dict)
+    
+    # Calculate accumulated unspent from ALL previous complete periods
+    total_rollover = 0.0
+    
+    # Start from the budget's start_date and iterate through all complete periods before current
+    period_date = db_budget.start_date
+    
+    while period_date < current_period_start:
+        period_start, period_end = db_budget.get_period_boundaries(period_date)
+        
+        # Calculate spent in this period
+        spent = db.query(func.sum(Transaction.amount)).filter(
+            and_(
+                Transaction.category_id.in_(category_ids),
+                Transaction.transaction_type == TransactionType.EXPENSE,
+                Transaction.transaction_date >= period_start,
+                Transaction.transaction_date <= period_end
+            )
+        ).scalar() or 0.0
+        
+        # Add unspent from this period to total rollover
+        unspent = max(0.0, db_budget.amount - spent)
+        total_rollover += unspent
+        
+        # Move to next period
+        if db_budget.period_type == BudgetPeriod.WEEKLY:
+            period_date = period_start + timedelta(weeks=1)
+        elif db_budget.period_type == BudgetPeriod.MONTHLY:
+            period_date = period_start + relativedelta(months=1)
+        elif db_budget.period_type == BudgetPeriod.QUARTERLY:
+            period_date = period_start + relativedelta(months=3)
+        elif db_budget.period_type == BudgetPeriod.ANNUAL:
+            period_date = period_start + relativedelta(years=1)
+    
+    # Update rollover amount with cumulative total
+    db_budget.rollover_amount = total_rollover
+    
+    db.commit()
+    db.refresh(db_budget)
+    
+    budget_dict = {
+        "id": db_budget.id,
+        "name": db_budget.name,
+        "category_ids": [cat.id for cat in db_budget.categories],
+        "amount": db_budget.amount,
+        "period_type": db_budget.period_type,
+        "start_date": db_budget.start_date,
+        "end_date": db_budget.end_date,
+        "allow_rollover": bool(db_budget.allow_rollover),
+        "rollover_amount": db_budget.rollover_amount,
+        "is_active": bool(db_budget.is_active),
+        "created_at": db_budget.created_at,
+        "updated_at": db_budget.updated_at,
+    }
+    
+    return BudgetResponse(**budget_dict)

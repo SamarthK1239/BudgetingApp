@@ -27,9 +27,11 @@ class BudgetUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     category_ids: Optional[List[int]] = Field(None, min_items=1)
     amount: Optional[float] = Field(None, gt=0)
+    period_type: Optional[BudgetPeriod] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
     allow_rollover: Optional[bool] = None
     is_active: Optional[bool] = None
-    end_date: Optional[date] = None
 
 
 class BudgetResponse(BaseModel):
