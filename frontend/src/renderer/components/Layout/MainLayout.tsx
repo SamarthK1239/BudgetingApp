@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, theme, Modal, Row, Col, Typography } from 'antd';
+import { Layout, Menu, theme, Modal, Row, Col, Typography, Dropdown, Avatar, Tag } from 'antd';
 import {
   DashboardOutlined,
   WalletOutlined,
@@ -11,9 +11,13 @@ import {
   BarChartOutlined,
   DollarCircleOutlined,
   BgColorsOutlined,
+  UserOutlined,
+  TeamOutlined,
+  LogoutOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme, THEME_OPTIONS } from '../../App';
+import { useAuth } from '../../contexts/AuthContext';
 
 const { Content, Sider } = Layout;
 const { Text } = Typography;
@@ -27,6 +31,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const location = useLocation();
   const { token } = theme.useToken();
   const { currentTheme, setTheme } = useTheme();
+  const { user, logout } = useAuth();
   const [themeModalOpen, setThemeModalOpen] = useState(false);
 
   const menuItems = [
@@ -38,6 +43,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     { key: '/goals', icon: <TrophyOutlined />, label: 'Goals' },
     { key: '/income', icon: <CalendarOutlined />, label: 'Income' },
     { key: '/reports', icon: <BarChartOutlined />, label: 'Reports' },
+    { key: '/users', icon: <TeamOutlined />, label: 'Users' },
+  ];
+
+  const accountMenuItems = [
+    {
+      key: 'account',
+      icon: <TeamOutlined />,
+      label: user?.is_admin ? 'Manage users' : 'My account',
+      onClick: () => navigate('/users'),
+    },
+    { type: 'divider' as const },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: 'Sign out',
+      danger: true,
+      onClick: () => {
+        logout();
+      },
+    },
   ];
 
   return (
@@ -74,14 +99,52 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           mode="inline"
           selectedKeys={[location.pathname]}
           style={{ 
-            height: 'calc(100% - 130px)', 
+            height: 'calc(100% - 196px)', 
             borderRight: 0,
             background: 'transparent',
             padding: '12px 8px',
+            overflowY: 'auto',
           }}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />
+        
+        {/* Signed-in user */}
+        <div style={{ padding: '12px 16px', borderTop: `1px solid ${token.colorBorderSecondary}` }}>
+          <Dropdown menu={{ items: accountMenuItems }} trigger={['click']} placement="topLeft">
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                padding: '6px 4px',
+                borderRadius: 8,
+              }}
+            >
+              <Avatar size="small" icon={<UserOutlined />} style={{ background: token.colorPrimary }} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: token.colorText,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {user?.display_name || user?.username || 'Account'}
+                </div>
+                {user?.is_admin && (
+                  <Tag color="gold" style={{ fontSize: 10, lineHeight: '16px', margin: 0 }}>
+                    admin
+                  </Tag>
+                )}
+              </div>
+            </div>
+          </Dropdown>
+        </div>
         
         {/* Theme Picker Button */}
         <div style={{ padding: '12px 16px', borderTop: `1px solid ${token.colorBorderSecondary}` }}>

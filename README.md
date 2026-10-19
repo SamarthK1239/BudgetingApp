@@ -1,6 +1,18 @@
 # BudgetingApp
 
-A cross-platform desktop budgeting application built with **Electron + React + TypeScript** (frontend) and **FastAPI + SQLAlchemy** (backend).
+A cross-platform budgeting application built with **Electron + React + TypeScript** (frontend) and **FastAPI + SQLAlchemy** (backend).
+
+It runs in two modes:
+
+- **Desktop app** — Electron starts a local backend; everything stays on one machine.
+- **Self-hosted server** — one always-on server publishes a **web UI** that any
+  device on your network or tailnet can use, protected by username/password
+  authentication. See **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+```bash
+# Self-hosted in one command
+docker compose up -d --build   # then open http://<server>:8000
+```
 
 ## Features
 
@@ -14,13 +26,18 @@ A cross-platform desktop budgeting application built with **Electron + React + T
 - **Reports**: Spending by category, income vs expenses, account balances, and balance trends over time
 - **Setup Wizard**: Multi-step first-run wizard for easy onboarding
 - **Dark Mode**: System-default theme switching with smooth transitions
-- **Data Privacy**: All data stored locally in SQLite database
+- **Multi-User Access**: Username/password authentication with administrator and member roles
+- **Web UI**: Serve the app from one machine and use it from any browser on your network or tailnet
+- **Data Privacy**: All data stored in a local SQLite database you control
 
 ### Technical Features
 - RESTful API with automatic OpenAPI documentation
 - Database migrations with Alembic
 - Transaction deduplication via import_id tracking
 - Soft delete for accounts and categories with transaction history
+- Session-based authentication with bcrypt password hashing and revocable server-side tokens
+- Single-process deployment: FastAPI serves both the REST API and the built web UI
+- Docker image and Compose file for self-hosting
 - CORS middleware for secure Electron-backend communication
 - Background backend process management in Electron
 
@@ -49,13 +66,17 @@ BudgetingApp/
 ├── backend/                   # Python FastAPI application
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── main.py           # FastAPI app entry with CORS
+│   │   ├── main.py           # FastAPI app entry, auth gating & web UI serving
+│   │   ├── config.py         # Environment-driven settings (BUDGET_* variables)
+│   │   ├── auth.py           # Password hashing, session tokens & dependencies
+│   │   ├── cli.py            # User administration CLI
 │   │   ├── database.py       # SQLAlchemy database connection
 │   │   ├── models/           # SQLAlchemy ORM models
 │   │   │   ├── account.py    # Account model with types
 │   │   │   ├── category.py   # Two-level category hierarchy
 │   │   │   ├── transaction.py # Transaction with type enum
 │   │   │   ├── budget.py     # Budget with period types
+│   │   │   ├── user.py       # User & session models
 │   │   │   └── category_keyword.py # Auto-categorization rules
 │   │   ├── schemas/          # Pydantic validation schemas
 │   │   │   ├── account.py
@@ -90,12 +111,19 @@ BudgetingApp/
 │   │   ├── main/             # Electron main process
 │   │   │   ├── main.js       # Window & lifecycle management
 │   │   │   ├── preload.js    # Secure IPC bridge
+│   │   │   ├── config.js     # Persisted remote server URL
 │   │   │   └── backend.js    # Backend process manager
 │   │   ├── renderer/         # React application
 │   │   │   ├── components/   # Reusable components
+│   │   │   │   ├── ServerSettings.tsx
 │   │   │   │   └── Layout/
 │   │   │   │       └── MainLayout.tsx
+│   │   │   ├── contexts/     # React contexts
+│   │   │   │   └── AuthContext.tsx
 │   │   │   ├── pages/        # Page components
+│   │   │   │   ├── Login.tsx
+│   │   │   │   ├── CreateAdmin.tsx
+│   │   │   │   ├── Users.tsx
 │   │   │   │   ├── SetupWizard.tsx
 │   │   │   │   ├── Dashboard.tsx
 │   │   │   │   ├── Accounts.tsx
@@ -116,7 +144,11 @@ BudgetingApp/
 │   ├── assets/               # Icons & images
 │   ├── package.json          # Node dependencies & scripts
 │   └── tsconfig.json         # TypeScript configuration
+├── Dockerfile                # Multi-stage image (web UI build + API runtime)
+├── docker-compose.yml        # Self-hosted deployment
+├── .env.example              # Annotated server configuration
 ├── BUILD.md                  # Production build guide
+├── DEPLOYMENT.md             # Self-hosting, Tailscale & authentication
 ├── DEVELOPMENT.md            # Development setup & architecture
 ├── QUICKSTART.md             # Quick start guide
 └── README.md                 # This file
@@ -124,7 +156,18 @@ BudgetingApp/
 
 ## Quick Start
 
-See [QUICKSTART.md](QUICKSTART.md) for a detailed 5-minute setup guide.
+See [QUICKSTART.md](QUICKSTART.md) for a detailed 5-minute setup guide, or
+[DEPLOYMENT.md](DEPLOYMENT.md) to self-host the server with a web UI.
+
+### Self-Hosted Server (web UI)
+
+```bash
+docker compose up -d --build
+```
+
+Open `http://<server>:8000`, create the first administrator account, and you are
+done. For tailnet-only access and HTTPS via `tailscale serve`, see
+[DEPLOYMENT.md](DEPLOYMENT.md).
 
 ### Prerequisites
 - **Python 3.9+** (3.11+ recommended)
@@ -151,7 +194,11 @@ npm install
 npm run electron-dev
 ```
 
-The Electron app will launch automatically and connect to the backend at `http://localhost:8000`. On first run, you'll see the Setup Wizard.
+The Electron app will launch automatically and connect to the backend at `http://localhost:8000`. On first run, you'll see the account creation screen, then the Setup Wizard.
+
+To point the desktop app at a self-hosted server instead of a local backend, use
+**Server settings** on the sign-in screen, or launch it with
+`BUDGETAPP_SERVER_URL=https://budget.your-tailnet.ts.net npm run electron`.
 
 ### API Documentation
 
@@ -200,8 +247,26 @@ Output will be in `frontend/dist/`:
 
 ## API Endpoints
 
+All `/api/*` endpoints require authentication except those under `/api/auth`.
+Browsers authenticate with the session cookie; other clients send
+`Authorization: Bearer <token>`.
+
+### Authentication
+- `GET /api/auth/bootstrap-status` - Check whether the first admin still needs creating
+- `POST /api/auth/bootstrap` - Create the first administrator (only while no users exist)
+- `POST /api/auth/login` - Sign in with username and password
+- `POST /api/auth/logout` - Revoke the current session
+- `GET /api/auth/me` - Current user
+- `POST /api/auth/change-password` - Change your own password
+- `GET /api/auth/sessions` - List your active sessions
+- `DELETE /api/auth/sessions/{id}` - Revoke one of your sessions
+- `GET /api/auth/users` - List users (admin)
+- `POST /api/auth/users` - Create user (admin)
+- `PATCH /api/auth/users/{id}` - Update user (admin)
+- `DELETE /api/auth/users/{id}` - Delete user (admin)
+
 ### Setup & Health
-- `GET /health` - Backend health check
+- `GET /health` - Backend health check (public)
 - `GET /api/setup/status` - Check if app is initialized
 - `POST /api/setup/initialize` - Initialize app with setup data
 
@@ -256,6 +321,7 @@ Output will be in `frontend/dist/`:
 ## Project Documentation
 
 - **[QUICKSTART.md](QUICKSTART.md)**: Quick 5-minute setup guide
+- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Self-hosting with Docker, Tailscale and authentication
 - **[DEVELOPMENT.md](DEVELOPMENT.md)**: Detailed development guide with architecture
 - **[BUILD.md](BUILD.md)**: Production build & distribution guide
 

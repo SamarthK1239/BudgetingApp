@@ -7,6 +7,7 @@ from app.models.transaction import Transaction, TransactionType
 from app.models.budget import Budget, BudgetPeriod
 from app.models.goal import Goal, GoalStatus
 from app.models.income_schedule import IncomeSchedule, IncomeFrequency
+from app.models.user import User, UserSession
 
 __all__ = [
     "Account",
@@ -22,4 +23,6 @@ __all__ = [
     "GoalStatus",
     "IncomeSchedule",
     "IncomeFrequency",
+    "User",
+    "UserSession",
 ]

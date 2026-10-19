@@ -1,5 +1,9 @@
 # BudgetingApp - Quick Start Guide
 
+> Want to run BudgetingApp on a home server and use it from a browser on any of
+> your devices? See **[DEPLOYMENT.md](DEPLOYMENT.md)** — it is a single
+> `docker compose up -d --build`.
+
 ## ⚡ Quick Start (5 Minutes)
 
 ### 1. Backend Setup
@@ -33,15 +37,24 @@ The application will open automatically!
 
 ## 🎯 First Run Experience
 
-1. **Setup Wizard** appears on first launch
-2. **Step 1**: Welcome screen
-3. **Step 2**: Add initial accounts (checking, savings, etc.)
-4. **Step 3**: Configure preferences (currency, date format, budget periods)
-5. **Step 4**: Complete setup - preset categories are automatically loaded
+1. **Create your account** - the first account you create becomes the administrator
+2. **Setup Wizard** appears next
+3. **Step 1**: Welcome screen
+4. **Step 2**: Add initial accounts (checking, savings, etc.)
+5. **Step 3**: Configure preferences (currency, date format, budget periods)
+6. **Step 4**: Complete setup - preset categories are automatically loaded
+
+Forgot your password later? On the server, run:
+
+```bash
+python -m app.cli reset-password --username <name>
+```
 
 ## 📱 Application Features
 
 ### Implemented ✅
+- **Authentication**: Username/password sign-in with admin and member roles
+- **Web UI**: Use the app from any browser when self-hosted
 - **Setup Wizard**: Multi-step initial configuration
 - **Dashboard**: Overview with statistics
 - **Account Management**: Create and manage financial accounts
@@ -88,12 +101,13 @@ Open browser: http://127.0.0.1:8000/docs
 
 Try these endpoints:
 - `GET /health` - Check if backend is running
-- `GET /api/setup/status` - Check setup status
-- `GET /api/categories` - View preset categories (after setup)
+- `GET /api/auth/bootstrap-status` - Check whether the first admin exists
+- `GET /api/setup/status` - Check setup status (requires sign-in)
+- `GET /api/categories` - View preset categories (requires sign-in, after setup)
 
 ### Test Frontend
 The Electron app should:
-1. Show setup wizard if first run
+1. Prompt you to create an account on first run, then show the setup wizard
 2. Initialize backend automatically
 3. Display main interface after setup
 4. Switch themes based on system preference

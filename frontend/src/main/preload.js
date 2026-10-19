@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Backend communication
   getBackendUrl: () => ipcRenderer.invoke('get-backend-url'),
   
+  setBackendUrl: (url) => ipcRenderer.invoke('set-backend-url', url),
+  
+  isRemoteMode: () => ipcRenderer.invoke('is-remote-mode'),
+  
   onBackendReady: (callback) => {
     ipcRenderer.on('backend-ready', (event, data) => callback(data));
   },

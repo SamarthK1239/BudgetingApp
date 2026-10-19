@@ -16,6 +16,11 @@ if getattr(sys, 'frozen', False):
     data_dir = os.path.join(os.path.expanduser("~"), ".budgetingapp")
     os.makedirs(data_dir, exist_ok=True)
     os.environ["DATABASE_PATH"] = os.path.join(data_dir, "budgeting.db")
+    # Keep the generated session signing key alongside the database; the
+    # executable's own directory is often read-only.
+    os.environ.setdefault("BUDGET_DATA_DIR", data_dir)
+    # The desktop app loads the UI from Electron, not from the backend.
+    os.environ.setdefault("BUDGET_SERVE_FRONTEND", "false")
 else:
     # Running as script
     application_path = os.path.dirname(os.path.abspath(__file__))

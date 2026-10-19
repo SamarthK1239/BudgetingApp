@@ -7,9 +7,13 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 const BackendManager = require('./backend');
+const appConfig = require('./config');
 
 let mainWindow;
 let backendManager;
+// Set when the user has configured a remote server, in which case no local
+// backend process is started.
+let remoteBackendUrl = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -83,9 +87,13 @@ async function startBackend() {
 
 // App lifecycle events
 app.on('ready', async () => {
-  // In production, always start the backend
-  // In development, only auto-start if explicitly requested
-  if (!isDev || process.env.AUTO_START_BACKEND === 'true') {
+  remoteBackendUrl = appConfig.getRemoteBackendUrl();
+
+  if (remoteBackendUrl) {
+    // Remote mode: the server is hosted elsewhere, so never spawn a local backend.
+    console.log(`Using remote BudgetingApp server at ${remoteBackendUrl}`);
+  } else if (!isDev || process.env.AUTO_START_BACKEND === 'true') {
+    // In production without a configured server, run the bundled backend locally.
     await startBackend();
   } else {
     console.log('Skipping backend auto-start in development mode. Backend URL: http://localhost:8000');
@@ -123,12 +131,34 @@ app.on('before-quit', async (event) => {
 
 // IPC Handlers
 ipcMain.handle('get-backend-url', async () => {
+  if (remoteBackendUrl) {
+    return remoteBackendUrl;
+  }
   if (backendManager) {
     return backendManager.getUrl();
   }
   // Return default backend URL for development
   return 'http://localhost:8000';
 });
+
+ipcMain.handle('set-backend-url', async (event, url) => {
+  const normalized = appConfig.setRemoteBackendUrl(url);
+  remoteBackendUrl = normalized;
+
+  // A locally spawned backend is redundant once a remote server is configured.
+  if (backendManager) {
+    try {
+      await backendManager.stop();
+    } catch (error) {
+      console.error('Error stopping local backend after switching to remote:', error);
+    }
+    backendManager = null;
+  }
+
+  return normalized;
+});
+
+ipcMain.handle('is-remote-mode', async () => Boolean(remoteBackendUrl));
 
 ipcMain.handle('open-file-dialog', async (event, options) => {
   const result = await dialog.showOpenDialog(mainWindow, options);

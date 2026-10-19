@@ -64,6 +64,9 @@ release/
 .env.test.local
 .env.production.local
 
+# Generated session signing key
+.secret_key
+
 # IDEs
 .vscode/
 .idea/

@@ -1,0 +1,36 @@
+services:
+  budgetapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: budgetingapp:latest
+    container_name: budgetingapp
+    restart: unless-stopped
+
+    # Published on all host interfaces so any tailnet device can reach it.
+    # To expose it only to the tailnet, replace with "<tailscale-ip>:8000:8000".
+    ports:
+      - "${BUDGET_PUBLISH_ADDR:-0.0.0.0}:${BUDGET_PUBLISH_PORT:-8000}:8000"
+
+    environment:
+      # Database, WAL files and the generated signing key live here.
+      BUDGET_DATA_DIR: /data
+      BUDGET_HOST: 0.0.0.0
+      BUDGET_PORT: 8000
+      BUDGET_SERVE_FRONTEND: "true"
+      # Generate with: openssl rand -base64 48
+      # Optional: one is generated and persisted to the volume on first run.
+      BUDGET_SECRET_KEY: ${BUDGET_SECRET_KEY:-}
+      BUDGET_SESSION_LIFETIME_DAYS: ${BUDGET_SESSION_LIFETIME_DAYS:-30}
+      # Set to "true" when serving over HTTPS (for example behind `tailscale serve`).
+      BUDGET_SECURE_COOKIES: ${BUDGET_SECURE_COOKIES:-false}
+      # Extra browser origins allowed to call the API. The web UI is served from
+      # this same server, so this is only needed for the Electron desktop client
+      # (whose renderer origin is `file://`/`null`) or a separately hosted frontend.
+      BUDGET_CORS_ORIGINS: ${BUDGET_CORS_ORIGINS:-file://,null}
+
+    volumes:
+      - budgetapp-data:/data
+
+volumes:
+  budgetapp-data:

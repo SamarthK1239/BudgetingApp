@@ -1,0 +1,36 @@
+# Dependencies and build output (rebuilt inside the image)
+**/node_modules
+frontend/build
+backend/dist
+backend/build
+backend/.venv
+backend/venv
+
+# Python caches
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+
+# Local databases and secrets must never end up in the image
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite3
+**/.secret_key
+**/.env
+
+# Version control and editor state
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Docs and desktop packaging assets not needed by the server
+*.md
+frontend/assets
+Dockerfile
+docker-compose.yml
+.dockerignore

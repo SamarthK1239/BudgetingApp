@@ -14,6 +14,10 @@ from app.schemas.income_schedule import (
     IncomeScheduleCreate, IncomeScheduleUpdate, IncomeScheduleResponse, UpcomingIncome
 )
 from app.schemas.setup import AppSetup, SetupStatusResponse, InitialAccountSetup
+from app.schemas.user import (
+    UserCreate, UserUpdate, UserResponse, LoginRequest, LoginResponse,
+    ChangePasswordRequest, BootstrapStatusResponse, SessionResponse, MessageResponse
+)
 
 __all__ = [
     "AccountCreate",
@@ -49,4 +53,13 @@ __all__ = [
     "AppSetup",
     "SetupStatusResponse",
     "InitialAccountSetup",
+    "UserCreate",
+    "UserUpdate",
+    "UserResponse",
+    "LoginRequest",
+    "LoginResponse",
+    "ChangePasswordRequest",
+    "BootstrapStatusResponse",
+    "SessionResponse",
+    "MessageResponse",
 ]

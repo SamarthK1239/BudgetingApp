@@ -10,34 +10,75 @@ declare global {
   interface Window {
     electronAPI?: {
       getBackendUrl: () => Promise<string>;
+      setBackendUrl?: (url: string) => Promise<string>;
+      isRemoteMode?: () => Promise<boolean>;
     };
+  }
+}
+
+const TOKEN_STORAGE_KEY = 'budgetapp-token';
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  display_name: string | null;
+  is_admin: boolean;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface LoginResult {
+  access_token: string;
+  token_type: string;
+  expires_at: string;
+  user: AuthUser;
+}
+
+export class UnauthorizedError extends Error {
+  constructor(message: string = 'Your session has expired. Please sign in again.') {
+    super(message);
+    this.name = 'UnauthorizedError';
   }
 }
 
 class ApiClient {
   private baseURL: string | null = null;
   private client: any = null;
+  private token: string | null = null;
+  private onUnauthorized: (() => void) | null = null;
 
   async initialize(): Promise<void> {
     // Get backend URL from Electron
     if (window.electronAPI) {
       this.baseURL = await window.electronAPI.getBackendUrl();
+    } else if (window.location.protocol.startsWith('http')) {
+      // Served by the backend itself: use the same origin so cookies apply.
+      this.baseURL = window.location.origin;
     } else {
-      // Fallback for web/dev
+      // Fallback for local dev outside Electron
       this.baseURL = 'http://localhost:8000';
     }
 
+    this.token = localStorage.getItem(TOKEN_STORAGE_KEY);
+
     this.client = axios.create({
       baseURL: this.baseURL,
-      timeout: 10000,
+      timeout: 30000,
+      // Send the session cookie when the UI is served from the backend origin.
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
-    // Request interceptor
+    // Request interceptor: attach the bearer token for non-browser clients
     this.client.interceptors.request.use(
       (config: any) => {
+        if (this.token) {
+          config.headers = config.headers || {};
+          config.headers.Authorization = `Bearer ${this.token}`;
+        }
         return config;
       },
       (error: any) => {
@@ -49,10 +90,135 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response: any) => response.data,
       (error: any) => {
+        const status = error.response?.status;
         const message = error.response?.data?.detail || error.message || 'An error occurred';
+
+        if (status === 401) {
+          const url: string = error.config?.url || '';
+          // A failed sign-in should surface its own message, not a session-expiry reset.
+          const isLoginAttempt = url.includes('/api/auth/login') || url.includes('/api/auth/bootstrap');
+          if (!isLoginAttempt) {
+            this.clearToken();
+            if (this.onUnauthorized) {
+              this.onUnauthorized();
+            }
+            return Promise.reject(new UnauthorizedError());
+          }
+        }
+
         return Promise.reject(new Error(message));
       }
     );
+  }
+
+  /** Current backend base URL, once initialized */
+  getBaseUrl(): string | null {
+    return this.baseURL;
+  }
+
+  /** Point the client at a different backend without a full page reload */
+  async setBaseUrl(url: string): Promise<void> {
+    const normalized = url.replace(/\/+$/, '');
+    if (window.electronAPI?.setBackendUrl) {
+      await window.electronAPI.setBackendUrl(normalized);
+    }
+    this.baseURL = normalized;
+    if (this.client) {
+      this.client.defaults.baseURL = normalized;
+    }
+  }
+
+  /** Register a callback invoked when the server rejects our session */
+  setUnauthorizedHandler(handler: (() => void) | null): void {
+    this.onUnauthorized = handler;
+  }
+
+  setToken(token: string): void {
+    this.token = token;
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  }
+
+  clearToken(): void {
+    this.token = null;
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+
+  hasToken(): boolean {
+    return Boolean(this.token);
+  }
+
+  // Auth endpoints
+  async getBootstrapStatus(): Promise<{ needs_bootstrap: boolean; user_count: number }> {
+    return this.client!.get('/api/auth/bootstrap-status');
+  }
+
+  async bootstrapAdmin(data: {
+    username: string;
+    password: string;
+    display_name?: string;
+  }): Promise<LoginResult> {
+    const result: LoginResult = await this.client!.post('/api/auth/bootstrap', data);
+    this.setToken(result.access_token);
+    return result;
+  }
+
+  async login(username: string, password: string): Promise<LoginResult> {
+    const result: LoginResult = await this.client!.post('/api/auth/login', { username, password });
+    this.setToken(result.access_token);
+    return result;
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.client!.post('/api/auth/logout');
+    } finally {
+      this.clearToken();
+    }
+  }
+
+  async getCurrentUser(): Promise<AuthUser> {
+    return this.client!.get('/api/auth/me');
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<any> {
+    return this.client!.post('/api/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  }
+
+  async getUsers(): Promise<AuthUser[]> {
+    return this.client!.get('/api/auth/users');
+  }
+
+  async createUser(data: {
+    username: string;
+    password: string;
+    display_name?: string;
+    is_admin?: boolean;
+  }): Promise<AuthUser> {
+    return this.client!.post('/api/auth/users', data);
+  }
+
+  async updateUser(id: number, data: {
+    display_name?: string;
+    is_admin?: boolean;
+    is_active?: boolean;
+    password?: string;
+  }): Promise<AuthUser> {
+    return this.client!.patch(`/api/auth/users/${id}`, data);
+  }
+
+  async deleteUser(id: number): Promise<any> {
+    return this.client!.delete(`/api/auth/users/${id}`);
+  }
+
+  async getSessions(): Promise<any[]> {
+    return this.client!.get('/api/auth/sessions');
+  }
+
+  async revokeSession(id: number): Promise<any> {
+    return this.client!.delete(`/api/auth/sessions/${id}`);
   }
 
   // Setup endpoints

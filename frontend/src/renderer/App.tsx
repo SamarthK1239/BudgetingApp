@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Provider } from 'react-redux';
 import { store } from './store';
 import apiClient from './api/client';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import Login from './pages/Login';
+import CreateAdmin from './pages/CreateAdmin';
+import Users from './pages/Users';
 import SetupWizard from './pages/SetupWizard';
 import Dashboard from './pages/Dashboard';
 import Accounts from './pages/Accounts';
@@ -62,9 +66,143 @@ const queryClient = new QueryClient({
   },
 });
 
-function App() {
+interface FullScreenProps {
+  isDarkMode: boolean;
+  children: React.ReactNode;
+}
+
+const FullScreen: React.FC<FullScreenProps> = ({ isDarkMode, children }) => (
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      background: isDarkMode ? '#141414' : '#f5f5f5',
+      padding: 24,
+    }}
+  >
+    {children}
+  </div>
+);
+
+/**
+ * Routes the user between the first-run admin screen, the login screen,
+ * the setup wizard and the main application.
+ */
+const AuthenticatedApp: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
+  const { status, user, error: authError } = useAuth();
   const [isSetupComplete, setIsSetupComplete] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      return;
+    }
+
+    let cancelled = false;
+    const checkSetup = async (): Promise<void> => {
+      setSetupLoading(true);
+      try {
+        const setupStatus = await apiClient.getSetupStatus();
+        if (!cancelled) {
+          setIsSetupComplete(setupStatus.is_setup_complete);
+          setSetupError(null);
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setSetupError(error?.message || 'Could not load setup status');
+        }
+      } finally {
+        if (!cancelled) {
+          setSetupLoading(false);
+        }
+      }
+    };
+
+    checkSetup();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, user?.id]);
+
+  if (status === 'loading') {
+    return (
+      <FullScreen isDarkMode={isDarkMode}>
+        <Spin size="large" tip="Connecting to BudgetingApp..." />
+      </FullScreen>
+    );
+  }
+
+  if (status === 'needs-bootstrap') {
+    return <CreateAdmin />;
+  }
+
+  if (status === 'unauthenticated') {
+    return (
+      <>
+        {authError && (
+          <Alert
+            type="error"
+            message="Connection problem"
+            description={authError}
+            showIcon
+            banner
+          />
+        )}
+        <Login />
+      </>
+    );
+  }
+
+  if (setupLoading) {
+    return (
+      <FullScreen isDarkMode={isDarkMode}>
+        <Spin size="large" tip="Loading BudgetingApp..." />
+      </FullScreen>
+    );
+  }
+
+  if (setupError) {
+    return (
+      <FullScreen isDarkMode={isDarkMode}>
+        <Alert
+          type="error"
+          message="Connection Error"
+          description={setupError}
+          showIcon
+          style={{ maxWidth: 500 }}
+        />
+      </FullScreen>
+    );
+  }
+
+  if (!isSetupComplete) {
+    return <SetupWizard onComplete={() => setIsSetupComplete(true)} />;
+  }
+
+  return (
+    <MainLayout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/accounts" element={<Accounts />} />
+        <Route path="/transactions" element={<Transactions />} />
+        <Route path="/budgets" element={<Budgets />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/goals" element={<Goals />} />
+        <Route path="/income" element={<Income />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/users" element={<Users />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </MainLayout>
+  );
+};
+
+function App() {
+  const [initialized, setInitialized] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeVariant>(() => {
     const saved = localStorage.getItem('budgetapp-theme');
     return (saved as ThemeVariant) || 'default';
@@ -80,47 +218,35 @@ function App() {
   };
 
   useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        await apiClient.initialize();
+        setError(null);
+      } catch (err: any) {
+        console.error('Failed to initialize app:', err);
+        setError(
+          `Failed to connect to the backend: ${err?.message || 'Unknown error'}. ` +
+            'Check that the server is running and reachable.'
+        );
+      } finally {
+        setInitialized(true);
+      }
+    };
+
     initializeApp();
   }, []);
 
-  const initializeApp = async () => {
-    try {
-      // Initialize API client
-      await apiClient.initialize();
-
-      // Check setup status
-      const status = await apiClient.getSetupStatus();
-      setIsSetupComplete(status.is_setup_complete);
-      setError(null);
-    } catch (error: any) {
-      console.error('Failed to initialize app:', error);
-      setError(`Failed to connect to backend: ${error.message || 'Unknown error'}. Please restart the application.`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading || error) {
+  if (!initialized || error) {
     return (
       <ConfigProvider
         theme={{
           algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
         }}
       >
-        <div 
-          style={{ 
-            display: 'flex', 
-            flexDirection: 'column',
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            height: '100vh',
-            background: isDarkMode ? '#141414' : '#f5f5f5',
-            padding: 24,
-          }}
-        >
-          {loading ? (
+        <FullScreen isDarkMode={isDarkMode}>
+          {!initialized ? (
             <Spin size="large" tip="Loading BudgetingApp..." />
-          ) : error ? (
+          ) : (
             <Alert
               type="error"
               message="Connection Error"
@@ -128,8 +254,8 @@ function App() {
               showIcon
               style={{ maxWidth: 500 }}
             />
-          ) : null}
-        </div>
+          )}
+        </FullScreen>
       </ConfigProvider>
     );
   }
@@ -203,25 +329,11 @@ function App() {
             },
           }}
         >
-          <Router>
-            {!isSetupComplete ? (
-              <SetupWizard onComplete={() => setIsSetupComplete(true)} />
-            ) : (
-              <MainLayout>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/accounts" element={<Accounts />} />
-                  <Route path="/transactions" element={<Transactions />} />
-                  <Route path="/budgets" element={<Budgets />} />
-                  <Route path="/categories" element={<Categories />} />
-                  <Route path="/goals" element={<Goals />} />
-                  <Route path="/income" element={<Income />} />
-                  <Route path="/reports" element={<Reports />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </MainLayout>
-            )}
-          </Router>
+          <AuthProvider>
+            <Router>
+              <AuthenticatedApp isDarkMode={isDarkMode} />
+            </Router>
+          </AuthProvider>
         </ConfigProvider>
         </ThemeContext.Provider>
       </QueryClientProvider>

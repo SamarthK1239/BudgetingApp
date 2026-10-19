@@ -8,11 +8,15 @@ from sqlalchemy import pool
 from alembic import context
 
 # Import models to ensure they're registered
+from app.config import settings
 from app.database import Base
 from app.models import account, category, transaction, budget
 
 # this is the Alembic Config object
 config = context.config
+
+# Point Alembic at the same database the application uses
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
