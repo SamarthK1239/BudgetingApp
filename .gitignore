@@ -86,3 +86,4 @@ Thumbs.db
 
 # User data (created at runtime)
 .budgetingapp/
+.graph/
